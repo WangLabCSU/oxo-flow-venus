@@ -60,6 +60,11 @@ pub enum VenusError {
     Json(#[from] serde_json::Error),
 }
 
+/// Generate a .oxoflow TOML workflow from a Venus configuration.
+pub fn generate_oxoflow(config: &VenusConfig) -> Result<String, VenusError> {
+    config.generate_oxoflow()
+}
+
 /// Analysis mode determining what types of samples are processed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
