@@ -7,4 +7,5 @@ dependencies:
   - r-rmarkdown
   - r-knitr
   - r-tidyverse
+  - r-argparse
   - python>=3.10

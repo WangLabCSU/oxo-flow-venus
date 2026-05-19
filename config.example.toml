@@ -27,6 +27,15 @@ conda = "envs/venus-qc.yaml"
 [env_groups.alignment]
 conda = "envs/venus-alignment.yaml"
 
+[env_groups.gatk]
+conda = "envs/venus-gatk.yaml"
+
+[env_groups.vep]
+conda = "envs/venus-vep.yaml"
+
+[env_groups.report]
+conda = "envs/venus-report.yaml"
+
 # Sample definitions
 [[samples]]
 name = "TUMOR_001"

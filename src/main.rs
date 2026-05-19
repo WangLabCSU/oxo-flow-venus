@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 //! Venus CLI — Clinical-grade tumor variant detection pipeline generator.
+//!
+//! This binary provides CLI commands for generating, validating, and inspecting
+//! Venus pipeline configurations that produce `.oxoflow` workflow files for the
+//! oxo-flow pipeline engine.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

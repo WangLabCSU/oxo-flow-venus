@@ -26,7 +26,7 @@
 ### From Source
 
 ```bash
-git clone https://github.com/Traitome/oxo-flow-venus.git
+git clone https://github.com/WangLabCSU/oxo-flow-venus.git
 cd oxo-flow-venus
 cargo install --path .
 ```
@@ -115,6 +115,6 @@ Apache-2.0
 
 ## Links
 
-- [oxo-flow](https://github.com/Traitome/oxo-flow)
+- [oxo-flow](https://github.com/WangLabCSU/oxo-flow)
 - [GATK](https://gatk.broadinstitute.org/)
 - [VEP](https://www.ensembl.org/vep)

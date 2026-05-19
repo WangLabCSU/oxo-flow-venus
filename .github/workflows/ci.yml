@@ -50,5 +50,5 @@ jobs:
         run: |
           for f in rules/*.oxoflow; do
             echo "Validating $f"
-            oxo-flow validate "$f" --as-include || true
+            oxo-flow validate "$f" --as-include
           done
