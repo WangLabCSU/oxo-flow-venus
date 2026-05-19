@@ -1,0 +1,13 @@
+/target/
+/Cargo.lock
+*.oxoflow
+!rules/*.oxoflow
+results/
+.venus/
+.DS_Store
+*.bam
+*.bai
+*.vcf.gz
+*.vcf.gz.tbi
+*.fastq.gz
+*.fq.gz
