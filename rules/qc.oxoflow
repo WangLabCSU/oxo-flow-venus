@@ -1,0 +1,27 @@
+# Venus QC Module - fastp and FastQC
+
+[[rules]]
+name = "fastp_{sample}"
+input = ["{sample_r1}", "{sample_r2}"]
+output = ["{output_dir}/trimmed/{sample}_R1.fq.gz", "{output_dir}/trimmed/{sample}_R2.fq.gz"]
+log = "{output_dir}/logs/fastp_{sample}.log"
+shell = """
+fastp -i {input[0]} -I {input[1]} \
+    -o {output[0]} -O {output[1]} \
+    --detect_adapter_for_pe \
+    --cut_front --cut_tail \
+    --json {output_dir}/qc/{sample}_fastp.json \
+    --html {output_dir}/qc/{sample}_fastp.html \
+    --thread {threads} 2> {log}
+"""
+env_group = "qc"
+
+[[rules]]
+name = "fastqc_{sample}"
+input = ["{sample_r1}", "{sample_r2}"]
+output = ["{output_dir}/qc/{sample}_R1_fastqc.html", "{output_dir}/qc/{sample}_R2_fastqc.html"]
+log = "{output_dir}/logs/fastqc_{sample}.log"
+shell = """
+fastqc -t {threads} -o {output_dir}/qc/ {input[0]} {input[1]} 2> {log}
+"""
+env_group = "qc"

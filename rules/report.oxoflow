@@ -1,0 +1,25 @@
+# Venus Report Module - Clinical report generation
+
+[[rules]]
+name = "tmb_calculation_{sample}"
+input = ["{output_dir}/annotated/{sample}.annotated.vcf.gz"]
+output = ["{output_dir}/tmb/{sample}.tmb.txt"]
+log = "{output_dir}/logs/tmb_{sample}.log"
+shell = """
+Rscript scripts/tmb_calculation.R \
+    --input {input[0]} \
+    --output {output[0]} 2> {log}
+"""
+env_group = "report"
+
+[[rules]]
+name = "clinical_report_{sample}"
+input = ["{output_dir}/annotated/{sample}.annotated.vcf.gz", "{output_dir}/tmb/{sample}.tmb.txt"]
+output = ["{output_dir}/reports/{sample}_clinical_report.html"]
+log = "{output_dir}/logs/report_{sample}.log"
+shell = """
+Rscript -e "rmarkdown::render('scripts/clinical_report.Rmd', \
+    output_file='{output[0]}', \
+    params=list(sample='{sample}', vcf='{input[0]}', tmb='{input[1]}'))" 2> {log}
+"""
+env_group = "report"

@@ -1,0 +1,26 @@
+# Venus SNV Filtering Module - FilterMutectCalls
+
+[[rules]]
+name = "filter_mutect_{sample}"
+input = ["{output_dir}/variants/{sample}.mutect2.vcf.gz"]
+output = ["{output_dir}/variants/{sample}.filtered.vcf.gz"]
+log = "{output_dir}/logs/filter_mutect_{sample}.log"
+shell = """
+gatk FilterMutectCalls \
+    -V {input[0]} \
+    -R {reference_fasta} \
+    -O {output[0]} 2> {log}
+"""
+env_group = "gatk"
+
+[[rules]]
+name = "merge_callers_{sample}"
+input = ["{output_dir}/variants/{sample}.filtered.vcf.gz", "{output_dir}/variants/{sample}.strelka2.vcf.gz"]
+output = ["{output_dir}/variants/{sample}.merged.vcf.gz"]
+log = "{output_dir}/logs/merge_{sample}.log"
+shell = """
+python scripts/merge_callers.py \
+    --input {input[0]} {input[1]} \
+    --output {output[0]} 2> {log}
+"""
+env_group = "gatk"

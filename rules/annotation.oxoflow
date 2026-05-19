@@ -1,0 +1,19 @@
+# Venus Annotation Module - VEP
+
+[[rules]]
+name = "vep_{sample}"
+input = ["{output_dir}/variants/{sample}.filtered.vcf.gz"]
+output = ["{output_dir}/annotated/{sample}.annotated.vcf.gz"]
+log = "{output_dir}/logs/vep_{sample}.log"
+shell = """
+vep --input_file {input[0]} \
+    --output_file {output[0]} \
+    --format vcf \
+    --vcf \
+    --offline \
+    --cache \
+    --dir_cache {vep_cache} \
+    --assembly {genome_build} \
+    --fork {threads} 2> {log}
+"""
+env_group = "vep"

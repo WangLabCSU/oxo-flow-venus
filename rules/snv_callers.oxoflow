@@ -1,0 +1,47 @@
+# Venus SNV Callers Module - Mutect2, HaplotypeCaller, Strelka2
+
+[[rules]]
+name = "mutect2_{sample}"
+input = ["{output_dir}/recal/{sample}.recal.bam"]
+output = ["{output_dir}/variants/{sample}.mutect2.vcf.gz"]
+log = "{output_dir}/logs/mutect2_{sample}.log"
+shell = """
+gatk Mutect2 \
+    -I {input[0]} \
+    {normal_input} \
+    -R {reference_fasta} \
+    {pon_args} \
+    {germline_resource_args} \
+    -O {output[0]} 2> {log}
+"""
+env_group = "gatk"
+
+[[rules]]
+name = "haplotype_caller_{sample}"
+input = ["{output_dir}/recal/{sample}.recal.bam"]
+output = ["{output_dir}/variants/{sample}.g.vcf.gz"]
+log = "{output_dir}/logs/haplotype_{sample}.log"
+shell = """
+gatk HaplotypeCaller \
+    -I {input[0]} \
+    -R {reference_fasta} \
+    -O {output[0]} \
+    -ERC GVCF 2> {log}
+"""
+env_group = "gatk"
+
+[[rules]]
+name = "strelka2_{sample}"
+input = ["{output_dir}/recal/{sample}.recal.bam", "{normal_bam}"]
+output = ["{output_dir}/variants/{sample}.strelka2.vcf.gz"]
+log = "{output_dir}/logs/strelka2_{sample}.log"
+shell = """
+configureStrelkaSomaticWorkflow.py \
+    --tumorBam {input[0]} \
+    --normalBam {input[1]} \
+    --referenceFasta {reference_fasta} \
+    --runDir {output_dir}/strelka2_{sample} && \
+{output_dir}/strelka2_{sample}/runWorkflow.py -m local -j {threads} && \
+cp {output_dir}/strelka2_{sample}/results/variants/somatic.snvs.vcf.gz {output[0]} 2> {log}
+"""
+env_group = "gatk"

@@ -1,0 +1,19 @@
+# Venus Alignment Module - BWA-MEM2 and samtools
+
+[[rules]]
+name = "bwa_mem2_{sample}"
+input = ["{output_dir}/trimmed/{sample}_R1.fq.gz", "{output_dir}/trimmed/{sample}_R2.fq.gz"]
+output = ["{output_dir}/aligned/{sample}.sorted.bam"]
+log = "{output_dir}/logs/bwa_mem2_{sample}.log"
+shell = """
+bwa-mem2 mem -t {threads} {reference_fasta} {input[0]} {input[1]} | \
+    samtools sort -@ {threads} -o {output[0]} 2> {log}
+"""
+env_group = "alignment"
+
+[[rules]]
+name = "samtools_index_{sample}"
+input = ["{output_dir}/aligned/{sample}.sorted.bam"]
+output = ["{output_dir}/aligned/{sample}.sorted.bam.bai"]
+shell = "samtools index {input[0]} {output[0]}"
+env_group = "alignment"

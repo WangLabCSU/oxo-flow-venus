@@ -1,0 +1,34 @@
+# Venus Preprocessing Module - MarkDuplicates and BQSR
+
+[[rules]]
+name = "mark_duplicates_{sample}"
+input = ["{output_dir}/aligned/{sample}.sorted.bam"]
+output = ["{output_dir}/dedup/{sample}.dedup.bam", "{output_dir}/dedup/{sample}.metrics.txt"]
+log = "{output_dir}/logs/markdup_{sample}.log"
+shell = """
+gatk MarkDuplicates \
+    -I {input[0]} \
+    -O {output[0]} \
+    -M {output[1]} \
+    --CREATE_INDEX true 2> {log}
+"""
+env_group = "gatk"
+
+[[rules]]
+name = "bqsr_{sample}"
+input = ["{output_dir}/dedup/{sample}.dedup.bam"]
+output = ["{output_dir}/recal/{sample}.recal.bam"]
+log = "{output_dir}/logs/bqsr_{sample}.log"
+shell = """
+gatk BaseRecalibrator \
+    -I {input[0]} \
+    -R {reference_fasta} \
+    {known_sites_args} \
+    -O {output_dir}/recal/{sample}.recal.table 2> {log} && \
+gatk ApplyBQSR \
+    -I {input[0]} \
+    -R {reference_fasta} \
+    --bqsr-recal-file {output_dir}/recal/{sample}.recal.table \
+    -O {output[0]}
+"""
+env_group = "gatk"
