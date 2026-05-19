@@ -1,0 +1,7 @@
+name: venus-vep
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - ensembl-vep=112
+  - bcftools=1.20

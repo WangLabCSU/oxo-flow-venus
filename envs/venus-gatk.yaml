@@ -1,0 +1,9 @@
+name: venus-gatk
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - gatk4=4.5
+  - samtools=1.20
+  - bcftools=1.20
+  - python>=3.10

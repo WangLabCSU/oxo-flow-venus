@@ -1,0 +1,7 @@
+name: venus-alignment
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - bwa-mem2=2.2
+  - samtools=1.20

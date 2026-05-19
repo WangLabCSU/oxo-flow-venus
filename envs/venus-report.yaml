@@ -1,0 +1,10 @@
+name: venus-report
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - r-base=4.3
+  - r-rmarkdown
+  - r-knitr
+  - r-tidyverse
+  - python>=3.10
