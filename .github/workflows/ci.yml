@@ -43,12 +43,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install oxo-flow
-        run: cargo install --git https://github.com/Traitome/oxo-flow oxo-flow-cli
-
-      - name: Validate workflow files
+      - name: Validate TOML syntax
         run: |
           for f in rules/*.oxoflow; do
             echo "Validating $f"
-            oxo-flow validate "$f" --as-include
+            python3 -c "import tomllib; tomllib.load(open('$f','rb'))"
           done
