@@ -49,7 +49,10 @@ fn main() -> Result<()> {
             std::fs::write(&output, oxoflow)?;
             println!("Generated: {}", output.display());
         }
-        Commands::Validate { config, skip_file_check: _ } => {
+        Commands::Validate {
+            config,
+            skip_file_check: _,
+        } => {
             let cfg = oxo_flow_venus::VenusConfig::from_file(&config)?;
             println!("✓ Configuration valid");
             println!("  Mode: {}", cfg.mode);

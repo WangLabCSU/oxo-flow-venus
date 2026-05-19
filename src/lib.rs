@@ -16,7 +16,9 @@ pub enum VenusError {
     MissingRequiredField(String),
 
     /// Invalid analysis mode specified.
-    #[error("invalid analysis mode: {0}. Expected one of: experiment_only, control_only, experiment_control")]
+    #[error(
+        "invalid analysis mode: {0}. Expected one of: experiment_only, control_only, experiment_control"
+    )]
     InvalidMode(String),
 
     /// Invalid sequencing type specified.
@@ -344,7 +346,9 @@ impl VenusConfig {
     pub fn validate(&self) -> Result<(), VenusError> {
         // Validate required fields
         if self.reference_fasta.is_empty() {
-            return Err(VenusError::MissingRequiredField("reference_fasta".to_string()));
+            return Err(VenusError::MissingRequiredField(
+                "reference_fasta".to_string(),
+            ));
         }
 
         if self.samples.is_empty() {
@@ -354,7 +358,9 @@ impl VenusConfig {
         // Validate sequencing type constraints
         match self.seq_type {
             SeqType::WES | SeqType::Panel => {
-                if self.target_bed.is_none() || self.target_bed.as_ref().is_none_or(|s| s.is_empty()) {
+                if self.target_bed.is_none()
+                    || self.target_bed.as_ref().is_none_or(|s| s.is_empty())
+                {
                     return Err(VenusError::MissingTargetBed {
                         mode: self.seq_type.to_string(),
                     });
@@ -455,8 +461,10 @@ impl VenusConfig {
         output.push_str("# Sample definitions\n");
         output.push_str("[config.samples]\n");
         for sample in &self.samples {
-            output.push_str(&format!("{} = {{ type = \"{}\", r1 = \"{}\"",
-                sample.name, sample.sample_type, sample.r1));
+            output.push_str(&format!(
+                "{} = {{ type = \"{}\", r1 = \"{}\"",
+                sample.name, sample.sample_type, sample.r1
+            ));
             if let Some(r2) = &sample.r2 {
                 output.push_str(&format!(", r2 = \"{}\"", r2));
             }
@@ -534,7 +542,11 @@ impl VenusConfig {
     }
 
     /// Generate QC rule for a sample.
-    fn generate_sample_qc_rule(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
+    fn generate_sample_qc_rule(
+        &self,
+        sample: &Sample,
+        output: &mut String,
+    ) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"fastp_{}\"\n", sample.name));
         output.push_str("input = [");
@@ -543,10 +555,15 @@ impl VenusConfig {
             output.push_str(&format!(", \"{}\"", r2));
         }
         output.push_str("]\n");
-        output.push_str(&format!("output = [\"{}/trimmed/{}_R1.fq.gz\"",
-            self.output_dir, sample.name));
+        output.push_str(&format!(
+            "output = [\"{}/trimmed/{}_R1.fq.gz\"",
+            self.output_dir, sample.name
+        ));
         if sample.r2.is_some() {
-            output.push_str(&format!(", \"{}/trimmed/{}_R2.fq.gz\"", self.output_dir, sample.name));
+            output.push_str(&format!(
+                ", \"{}/trimmed/{}_R2.fq.gz\"",
+                self.output_dir, sample.name
+            ));
         }
         output.push_str("]\n");
         if sample.r2.is_some() {
@@ -563,22 +580,32 @@ impl VenusConfig {
     }
 
     /// Generate alignment rule for a sample.
-    fn generate_alignment_rule(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
+    fn generate_alignment_rule(
+        &self,
+        sample: &Sample,
+        output: &mut String,
+    ) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"align_{}\"\n", sample.name));
         if sample.r2.is_some() {
-            output.push_str(&format!("input = [\"{}/trimmed/{}_R1.fq.gz\", \"{}/trimmed/{}_R2.fq.gz\"]\n",
-                self.output_dir, sample.name, self.output_dir, sample.name));
+            output.push_str(&format!(
+                "input = [\"{}/trimmed/{}_R1.fq.gz\", \"{}/trimmed/{}_R2.fq.gz\"]\n",
+                self.output_dir, sample.name, self.output_dir, sample.name
+            ));
             output.push_str(&format!("shell = \"bwa-mem2 mem -t {{threads}} {} {{input[0]}} {{input[1]}} | samtools sort -@ {{threads}} -o {{output[0]}}\"\n",
                 self.reference_fasta));
         } else {
-            output.push_str(&format!("input = [\"{}/trimmed/{}_R1.fq.gz\"]\n",
-                self.output_dir, sample.name));
+            output.push_str(&format!(
+                "input = [\"{}/trimmed/{}_R1.fq.gz\"]\n",
+                self.output_dir, sample.name
+            ));
             output.push_str(&format!("shell = \"bwa-mem2 mem -t {{threads}} {} {{input[0]}} | samtools sort -@ {{threads}} -o {{output[0]}}\"\n",
                 self.reference_fasta));
         }
-        output.push_str(&format!("output = [\"{}/aligned/{}.sorted.bam\"]\n",
-            self.output_dir, sample.name));
+        output.push_str(&format!(
+            "output = [\"{}/aligned/{}.sorted.bam\"]\n",
+            self.output_dir, sample.name
+        ));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str(&format!("memory = \"{}\"\n", self.defaults.memory));
         output.push_str("[rules.environment]\n");
@@ -587,15 +614,25 @@ impl VenusConfig {
     }
 
     /// Generate tumor-only somatic calling rule.
-    fn generate_tumor_only_calling(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
+    fn generate_tumor_only_calling(
+        &self,
+        sample: &Sample,
+        output: &mut String,
+    ) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"mutect2_{}\"\n", sample.name));
-        output.push_str(&format!("input = [\"{}/aligned/{}.sorted.bam\"]\n",
-            self.output_dir, sample.name));
-        output.push_str(&format!("output = [\"{}/variants/{}.mutect2.vcf.gz\"]\n",
-            self.output_dir, sample.name));
-        output.push_str(&format!("shell = \"gatk Mutect2 -I {{input[0]}} -R {} -O {{output[0]}}\"\n",
-            self.reference_fasta));
+        output.push_str(&format!(
+            "input = [\"{}/aligned/{}.sorted.bam\"]\n",
+            self.output_dir, sample.name
+        ));
+        output.push_str(&format!(
+            "output = [\"{}/variants/{}.mutect2.vcf.gz\"]\n",
+            self.output_dir, sample.name
+        ));
+        output.push_str(&format!(
+            "shell = \"gatk Mutect2 -I {{input[0]}} -R {} -O {{output[0]}}\"\n",
+            self.reference_fasta
+        ));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str("[rules.environment]\n");
         output.push_str("conda = \"envs/gatk.yaml\"\n");
@@ -603,15 +640,25 @@ impl VenusConfig {
     }
 
     /// Generate germline calling rule.
-    fn generate_germline_calling(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
+    fn generate_germline_calling(
+        &self,
+        sample: &Sample,
+        output: &mut String,
+    ) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"haplotype_{}\"\n", sample.name));
-        output.push_str(&format!("input = [\"{}/aligned/{}.sorted.bam\"]\n",
-            self.output_dir, sample.name));
-        output.push_str(&format!("output = [\"{}/variants/{}.g.vcf.gz\"]\n",
-            self.output_dir, sample.name));
-        output.push_str(&format!("shell = \"gatk HaplotypeCaller -I {{input[0]}} -R {} -O {{output[0]}} -ERC GVCF\"\n",
-            self.reference_fasta));
+        output.push_str(&format!(
+            "input = [\"{}/aligned/{}.sorted.bam\"]\n",
+            self.output_dir, sample.name
+        ));
+        output.push_str(&format!(
+            "output = [\"{}/variants/{}.g.vcf.gz\"]\n",
+            self.output_dir, sample.name
+        ));
+        output.push_str(&format!(
+            "shell = \"gatk HaplotypeCaller -I {{input[0]}} -R {} -O {{output[0]}} -ERC GVCF\"\n",
+            self.reference_fasta
+        ));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str("[rules.environment]\n");
         output.push_str("conda = \"envs/gatk.yaml\"\n");
@@ -619,13 +666,22 @@ impl VenusConfig {
     }
 
     /// Generate paired tumor-normal calling rule.
-    fn generate_paired_calling(&self, tumor: &str, normal: &str, output: &mut String) -> Result<(), VenusError> {
+    fn generate_paired_calling(
+        &self,
+        tumor: &str,
+        normal: &str,
+        output: &mut String,
+    ) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"mutect2_{}_paired\"\n", tumor));
-        output.push_str(&format!("input = [\"{}/aligned/{}.sorted.bam\", \"{}/aligned/{}.sorted.bam\"]\n",
-            self.output_dir, tumor, self.output_dir, normal));
-        output.push_str(&format!("output = [\"{}/variants/{}.mutect2.vcf.gz\"]\n",
-            self.output_dir, tumor));
+        output.push_str(&format!(
+            "input = [\"{}/aligned/{}.sorted.bam\", \"{}/aligned/{}.sorted.bam\"]\n",
+            self.output_dir, tumor, self.output_dir, normal
+        ));
+        output.push_str(&format!(
+            "output = [\"{}/variants/{}.mutect2.vcf.gz\"]\n",
+            self.output_dir, tumor
+        ));
         output.push_str(&format!("shell = \"gatk Mutect2 -I {{input[0]}} -I {{input[1]}} -normal {} -R {} -O {{output[0]}}\"\n",
             normal, self.reference_fasta));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
@@ -647,7 +703,10 @@ mod tests {
     fn analysis_mode_display() {
         assert_eq!(AnalysisMode::ExperimentOnly.to_string(), "experiment_only");
         assert_eq!(AnalysisMode::ControlOnly.to_string(), "control_only");
-        assert_eq!(AnalysisMode::ExperimentControl.to_string(), "experiment_control");
+        assert_eq!(
+            AnalysisMode::ExperimentControl.to_string(),
+            "experiment_control"
+        );
     }
 
     #[test]
@@ -709,9 +768,12 @@ mod tests {
             ],
             env_groups: {
                 let mut map = HashMap::new();
-                map.insert("gatk".to_string(), EnvGroup {
-                    conda: "envs/gatk.yaml".to_string(),
-                });
+                map.insert(
+                    "gatk".to_string(),
+                    EnvGroup {
+                        conda: "envs/gatk.yaml".to_string(),
+                    },
+                );
                 map
             },
             defaults: Defaults {
@@ -754,7 +816,10 @@ mod tests {
         };
 
         let result = config.validate();
-        assert!(matches!(result, Err(VenusError::InconsistentModeSamples { .. })));
+        assert!(matches!(
+            result,
+            Err(VenusError::InconsistentModeSamples { .. })
+        ));
     }
 
     #[test]
@@ -776,7 +841,10 @@ mod tests {
         };
 
         let result = config.validate();
-        assert!(matches!(result, Err(VenusError::InconsistentModeSamples { .. })));
+        assert!(matches!(
+            result,
+            Err(VenusError::InconsistentModeSamples { .. })
+        ));
     }
 
     #[test]
@@ -818,8 +886,7 @@ mod tests {
             known_sites: None,
             target_bed: None,
             samples: vec![
-                Sample::new("T1", SampleType::Tumor, "/data/T1_R1.fq.gz")
-                    .with_pair_id("N1"),
+                Sample::new("T1", SampleType::Tumor, "/data/T1_R1.fq.gz").with_pair_id("N1"),
                 Sample::new("N1", SampleType::Normal, "/data/N1_R1.fq.gz"),
             ],
             env_groups: HashMap::new(),
@@ -875,12 +942,18 @@ mod tests {
             ],
             env_groups: {
                 let mut map = HashMap::new();
-                map.insert("align".to_string(), EnvGroup {
-                    conda: "envs/bwa.yaml".to_string(),
-                });
-                map.insert("call".to_string(), EnvGroup {
-                    conda: "envs/gatk.yaml".to_string(),
-                });
+                map.insert(
+                    "align".to_string(),
+                    EnvGroup {
+                        conda: "envs/bwa.yaml".to_string(),
+                    },
+                );
+                map.insert(
+                    "call".to_string(),
+                    EnvGroup {
+                        conda: "envs/gatk.yaml".to_string(),
+                    },
+                );
                 map
             },
             defaults: Defaults {
@@ -936,7 +1009,10 @@ mod tests {
 
     #[test]
     fn enum_default_values() {
-        assert!(matches!(AnalysisMode::default(), AnalysisMode::ExperimentOnly));
+        assert!(matches!(
+            AnalysisMode::default(),
+            AnalysisMode::ExperimentOnly
+        ));
         assert!(matches!(SeqType::default(), SeqType::WES));
         assert!(matches!(GenomeBuild::default(), GenomeBuild::GRCh38));
     }
