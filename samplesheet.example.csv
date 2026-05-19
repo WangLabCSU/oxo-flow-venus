@@ -1,0 +1,5 @@
+name,type,r1,r2,pair_id,patient_id,tissue
+TUMOR_001,tumor,data/TUMOR_001_R1.fastq.gz,data/TUMOR_001_R2.fastq.gz,NORMAL_001,P001,lung
+NORMAL_001,normal,data/NORMAL_001_R1.fastq.gz,data/NORMAL_001_R2.fastq.gz,,P001,blood
+TUMOR_002,tumor,data/TUMOR_002_R1.fastq.gz,data/TUMOR_002_R2.fastq.gz,NORMAL_002,P002,colon
+NORMAL_002,normal,data/NORMAL_002_R1.fastq.gz,data/NORMAL_002_R2.fastq.gz,,P002,blood

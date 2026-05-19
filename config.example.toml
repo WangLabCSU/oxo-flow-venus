@@ -1,0 +1,51 @@
+# Venus Pipeline Configuration Example
+# Generate workflow: venus generate config.toml -o venus.oxoflow
+
+[venus]
+mode = "experiment_control"    # experiment_only, control_only, experiment_control
+seq_type = "wes"               # wgs, wes, panel
+genome_build = "GRCh38"         # GRCh37, GRCh38
+output_dir = "results"          # Output directory
+
+# Reference files
+reference_dir = "/data/GRCh38"
+reference_fasta = "/data/GRCh38/genome.fa"
+target_bed = "/data/GRCh38/exome.bed"
+dbsnp = "/data/GRCh38/dbsnp.vcf.gz"
+known_indels = "/data/GRCh38/Mills.indels.vcf.gz"
+vep_cache = "/data/vep_cache"
+
+# Optional resources
+pon = ""                    # Panel of normals VCF
+gnomad = ""                 # Population frequencies
+germline_resource = ""      # Germline variants for filtering
+
+[defaults]
+threads = 8
+memory = "16G"
+env_group = "default"
+
+# Environment definitions
+[env_groups.default]
+conda = "envs/venus-gatk.yaml"
+
+[env_groups.qc]
+conda = "envs/venus-qc.yaml"
+
+[env_groups.alignment]
+conda = "envs/venus-alignment.yaml"
+
+# Sample definitions
+[[samples]]
+name = "TUMOR_001"
+type = "tumor"
+r1 = "data/TUMOR_001_R1.fastq.gz"
+r2 = "data/TUMOR_001_R2.fastq.gz"
+pair_id = "NORMAL_001"
+metadata = { patient_id = "P001", tissue = "lung" }
+
+[[samples]]
+name = "NORMAL_001"
+type = "normal"
+r1 = "data/NORMAL_001_R1.fastq.gz"
+r2 = "data/NORMAL_001_R2.fastq.gz"
