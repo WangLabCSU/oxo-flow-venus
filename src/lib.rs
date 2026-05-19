@@ -538,13 +538,20 @@ impl VenusConfig {
     fn generate_sample_qc_rule(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"fastp_{}\"\n", sample.name));
-        output.push_str(&format!("input = [\"{}\"]\n", sample.r1));
+        output.push_str("input = [");
+        output.push_str(&format!("\"{}\"", sample.r1));
         if let Some(r2) = &sample.r2 {
-            output.push_str(&format!("input = [\"{}\"]\n", r2));
+            output.push_str(&format!(", \"{}\"", r2));
         }
-        output.push_str(&format!("output = [\"{}/qc/{}.fastp.json\"]\n",
+        output.push_str("]\n");
+        output.push_str(&format!("output = [\"{}/trimmed/{}_R1.fq.gz\"",
             self.output_dir, sample.name));
-        output.push_str(&format!("shell = \"fastp -i {{input[0]}} -o {{output[0]}} --json {{output[0]}} --thread {{threads}}\"\n"));
+        if sample.r2.is_some() {
+            output.push_str(&format!(", \"{}/trimmed/{}_R2.fq.gz\"", self.output_dir, sample.name));
+        }
+        output.push_str("]\n");
+        output.push_str(&format!("shell = \"fastp -i {{input[0]}} -o {{output[0]}} --json {}/qc/{}.fastp.json --thread {{threads}}\"\n",
+            self.output_dir, sample.name));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str("[rules.environment]\n");
         output.push_str("conda = \"envs/fastp.yaml\"\n");
