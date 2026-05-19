@@ -1,0 +1,40 @@
+[package]
+name = "oxo-flow-venus"
+version = "1.0.0"
+edition = "2024"
+authors = ["Traitome <https://github.com/Traitome>"]
+license = "Apache-2.0"
+description = "Venus: Clinical-grade tumor variant detection pipeline built on oxo-flow"
+repository = "https://github.com/Traitome/oxo-flow-venus"
+homepage = "https://github.com/Traitome/oxo-flow-venus"
+readme = "README.md"
+keywords = ["bioinformatics", "pipeline", "variant-calling", "cancer", "genomics"]
+categories = ["science", "command-line-utilities"]
+
+[[bin]]
+name = "venus"
+path = "src/main.rs"
+
+[lib]
+name = "oxo_flow_venus"
+path = "src/lib.rs"
+
+[dependencies]
+oxo-flow-core = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
