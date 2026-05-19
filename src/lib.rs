@@ -320,7 +320,7 @@ pub struct VenusConfig {
 }
 
 fn default_version() -> String {
-    "1.0.0".to_string()
+    "0.5.4".to_string()
 }
 
 fn default_description() -> String {
@@ -354,7 +354,7 @@ impl VenusConfig {
         // Validate sequencing type constraints
         match self.seq_type {
             SeqType::WES | SeqType::Panel => {
-                if self.target_bed.is_none() || self.target_bed.as_ref().map_or(true, |s| s.is_empty()) {
+                if self.target_bed.is_none() || self.target_bed.as_ref().is_none_or(|s| s.is_empty()) {
                     return Err(VenusError::MissingTargetBed {
                         mode: self.seq_type.to_string(),
                     });
@@ -405,15 +405,14 @@ impl VenusConfig {
                     self.samples.iter().map(|s| &s.name).collect();
 
                 for sample in &self.samples {
-                    if sample.sample_type == SampleType::Tumor {
-                        if let Some(pair_id) = &sample.pair_id {
-                            if !sample_names.contains(pair_id) {
-                                return Err(VenusError::PairIdNotFound {
-                                    pair_id: pair_id.clone(),
-                                    sample: sample.name.clone(),
-                                });
-                            }
-                        }
+                    if sample.sample_type == SampleType::Tumor
+                        && let Some(pair_id) = &sample.pair_id
+                        && !sample_names.contains(pair_id)
+                    {
+                        return Err(VenusError::PairIdNotFound {
+                            pair_id: pair_id.clone(),
+                            sample: sample.name.clone(),
+                        });
                     }
                 }
             }
@@ -522,10 +521,10 @@ impl VenusConfig {
             AnalysisMode::ExperimentControl => {
                 // Paired somatic calling
                 for sample in &self.samples {
-                    if sample.sample_type == SampleType::Tumor {
-                        if let Some(normal_name) = &sample.pair_id {
-                            self.generate_paired_calling(&sample.name, normal_name, output)?;
-                        }
+                    if sample.sample_type == SampleType::Tumor
+                        && let Some(normal_name) = &sample.pair_id
+                    {
+                        self.generate_paired_calling(&sample.name, normal_name, output)?;
                     }
                 }
             }
@@ -550,8 +549,13 @@ impl VenusConfig {
             output.push_str(&format!(", \"{}/trimmed/{}_R2.fq.gz\"", self.output_dir, sample.name));
         }
         output.push_str("]\n");
-        output.push_str(&format!("shell = \"fastp -i {{input[0]}} -o {{output[0]}} --json {}/qc/{}.fastp.json --thread {{threads}}\"\n",
-            self.output_dir, sample.name));
+        if sample.r2.is_some() {
+            output.push_str(&format!("shell = \"fastp -i {{input[0]}} -I {{input[1]}} -o {{output[0]}} -O {{output[1]}} --json {}/qc/{}.fastp.json --thread {{threads}}\"\n",
+                self.output_dir, sample.name));
+        } else {
+            output.push_str(&format!("shell = \"fastp -i {{input[0]}} -o {{output[0]}} --json {}/qc/{}.fastp.json --thread {{threads}}\"\n",
+                self.output_dir, sample.name));
+        }
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str("[rules.environment]\n");
         output.push_str("conda = \"envs/fastp.yaml\"\n");
@@ -562,12 +566,19 @@ impl VenusConfig {
     fn generate_alignment_rule(&self, sample: &Sample, output: &mut String) -> Result<(), VenusError> {
         output.push_str("\n[[rules]]\n");
         output.push_str(&format!("name = \"align_{}\"\n", sample.name));
-        output.push_str(&format!("input = [\"{}/trimmed/{}_R1.fq.gz\"]\n",
-            self.output_dir, sample.name));
+        if sample.r2.is_some() {
+            output.push_str(&format!("input = [\"{}/trimmed/{}_R1.fq.gz\", \"{}/trimmed/{}_R2.fq.gz\"]\n",
+                self.output_dir, sample.name, self.output_dir, sample.name));
+            output.push_str(&format!("shell = \"bwa-mem2 mem -t {{threads}} {} {{input[0]}} {{input[1]}} | samtools sort -@ {{threads}} -o {{output[0]}}\"\n",
+                self.reference_fasta));
+        } else {
+            output.push_str(&format!("input = [\"{}/trimmed/{}_R1.fq.gz\"]\n",
+                self.output_dir, sample.name));
+            output.push_str(&format!("shell = \"bwa-mem2 mem -t {{threads}} {} {{input[0]}} | samtools sort -@ {{threads}} -o {{output[0]}}\"\n",
+                self.reference_fasta));
+        }
         output.push_str(&format!("output = [\"{}/aligned/{}.sorted.bam\"]\n",
             self.output_dir, sample.name));
-        output.push_str(&format!("shell = \"bwa-mem2 mem -t {{threads}} {} {{input[0]}} | samtools sort -@ {{threads}} -o {{output[0]}}\"\n",
-            self.reference_fasta));
         output.push_str(&format!("threads = {}\n", self.defaults.threads));
         output.push_str(&format!("memory = \"{}\"\n", self.defaults.memory));
         output.push_str("[rules.environment]\n");
@@ -662,7 +673,7 @@ mod tests {
     fn validate_wes_needs_bed() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ExperimentOnly,
             seq_type: SeqType::WES,
@@ -684,7 +695,7 @@ mod tests {
     fn validate_produces_toml() {
         let config = VenusConfig {
             name: "test_pipeline".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "Test pipeline".to_string(),
             mode: AnalysisMode::ExperimentOnly,
             seq_type: SeqType::WGS,
@@ -728,7 +739,7 @@ mod tests {
     fn validate_experiment_only_with_normal_fails() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ExperimentOnly,
             seq_type: SeqType::WGS,
@@ -750,7 +761,7 @@ mod tests {
     fn validate_control_only_with_tumor_fails() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ControlOnly,
             seq_type: SeqType::WGS,
@@ -772,7 +783,7 @@ mod tests {
     fn validate_pair_id_not_found() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ExperimentControl,
             seq_type: SeqType::WGS,
@@ -798,7 +809,7 @@ mod tests {
     fn validate_experiment_control_success() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ExperimentControl,
             seq_type: SeqType::WGS,
@@ -824,7 +835,7 @@ mod tests {
     fn validate_empty_samples_fails() {
         let config = VenusConfig {
             name: "test".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "test".to_string(),
             mode: AnalysisMode::ExperimentOnly,
             seq_type: SeqType::WGS,
@@ -846,7 +857,7 @@ mod tests {
     fn generate_oxoflow_includes_all_sections() {
         let config = VenusConfig {
             name: "complete_test".to_string(),
-            version: "2.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "Complete test pipeline".to_string(),
             mode: AnalysisMode::ExperimentControl,
             seq_type: SeqType::Panel,
@@ -934,7 +945,7 @@ mod tests {
     fn serialization_roundtrip() {
         let config = VenusConfig {
             name: "roundtrip".to_string(),
-            version: "1.0.0".to_string(),
+            version: "0.5.4".to_string(),
             description: "Test".to_string(),
             mode: AnalysisMode::ExperimentOnly,
             seq_type: SeqType::WES,

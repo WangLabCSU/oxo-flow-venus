@@ -45,14 +45,12 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Generate { config, output } => {
             let cfg = oxo_flow_venus::VenusConfig::from_file(&config)?;
-            cfg.validate()?;
             let oxoflow = oxo_flow_venus::generate_oxoflow(&cfg)?;
             std::fs::write(&output, oxoflow)?;
             println!("Generated: {}", output.display());
         }
         Commands::Validate { config, skip_file_check: _ } => {
             let cfg = oxo_flow_venus::VenusConfig::from_file(&config)?;
-            cfg.validate()?;
             println!("✓ Configuration valid");
             println!("  Mode: {}", cfg.mode);
             println!("  Sequencing: {}", cfg.seq_type);

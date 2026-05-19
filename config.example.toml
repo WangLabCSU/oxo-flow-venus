@@ -1,24 +1,16 @@
 # Venus Pipeline Configuration Example
 # Generate workflow: venus generate config.toml -o venus.oxoflow
 
-[venus]
-mode = "experiment_control"    # experiment_only, control_only, experiment_control
-seq_type = "wes"               # wgs, wes, panel
-genome_build = "GRCh38"         # GRCh37, GRCh38
-output_dir = "results"          # Output directory
+name = "venus_pipeline"          # Workflow name
+mode = "experiment_control"      # experiment_only, control_only, experiment_control
+seq_type = "wes"                 # wgs, wes, panel
+genome_build = "GRCh38"          # GRCh37, GRCh38
+output_dir = "results"           # Output directory
 
 # Reference files
-reference_dir = "/data/GRCh38"
 reference_fasta = "/data/GRCh38/genome.fa"
+known_sites = "/data/GRCh38/dbsnp.vcf.gz"
 target_bed = "/data/GRCh38/exome.bed"
-dbsnp = "/data/GRCh38/dbsnp.vcf.gz"
-known_indels = "/data/GRCh38/Mills.indels.vcf.gz"
-vep_cache = "/data/vep_cache"
-
-# Optional resources
-pon = ""                    # Panel of normals VCF
-gnomad = ""                 # Population frequencies
-germline_resource = ""      # Germline variants for filtering
 
 [defaults]
 threads = 8

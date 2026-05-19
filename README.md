@@ -42,7 +42,7 @@ cargo install --path .
 1. **Create a configuration file** (`config.toml`):
 
 ```toml
-[venus]
+name = "venus_pipeline"
 mode = "experiment_control"
 seq_type = "wes"
 genome_build = "GRCh38"
