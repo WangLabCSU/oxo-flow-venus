@@ -47,7 +47,7 @@ picard MarkDuplicates \
     -I {input} -O {output[0]} -M {output[1]} \
     --CREATE_INDEX true \
     --VALIDATION_STRINGENCY LENIENT \
-    --TMP_DIR .oxo-flow/tmp/{sample} \
+    --TMP_DIR tmp/picard/{sample} \
     -Xmx{effective_memory_mb}m \
     2> {log}
 """
