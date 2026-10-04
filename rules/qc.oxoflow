@@ -57,7 +57,7 @@ memory = "4G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/fastqc logs/fastqc && \
-fastqc --threads {threads} -o qc/fastqc {input} 2> {log}
+fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 """
 
 # Cohort-wide MultiQC aggregation over fastp + fastqc outputs.

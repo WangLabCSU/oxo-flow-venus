@@ -35,7 +35,7 @@ memory = "4G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p scrna/fastqc logs/scrna_fastqc && \
-fastqc --threads {threads} -o scrna/fastqc {input[0]} {input[1]} 2> {log}
+fastqc --threads {threads} --outdir scrna/fastqc {input[0]} {input[1]} 2> {log}
 """
 
 # Cell calling + UMI counting (dnbc4tools rna run; outputs under <outdir>/<name>/outs/).
