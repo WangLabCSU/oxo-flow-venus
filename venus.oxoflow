@@ -1,0 +1,120 @@
+# Venus — tumor multi-omics pipeline for oxo-flow
+#
+# WGS/WES somatic calling (paired + tumor-only), CNV (CNVkit), bulk RNA-seq
+# (STAR + featureCounts), single-cell RNA-seq (dnbc4tools + scanpy), and a
+# cohort clinical report whose methods section is generated from the commands
+# that actually executed (rule_runs in .oxo-flow/checkpoint.json).
+#
+# Contig naming: reference FASTA uses UCSC-style "chr" prefixes (chr1..chrX,
+# chrM). Mutect2 scatter uses config.chromosomes — keep in sync with the FASTA.
+#
+# Platform note: BGI (DNB/MGISEQ) and Illumina FASTQs are interchangeable
+# downstream of fastp; single-cell chemistry auto-detection (dnbc4tools
+# --chemistry auto) handles both BGI DNBSEQ and 10x-style libraries.
+
+[workflow]
+name = "venus"
+description = "Tumor multi-omics: WGS/WES somatic SNV/indel + CNV + bulk RNA + single-cell RNA with cohort reporting"
+
+pairs_file = "config/pairs.tsv"
+sample_groups_file = "config/groups.tsv"
+
+# ---------------------------------------------------------------------------
+# Config — override any key at runtime with `oxo-flow run --arg KEY=VALUE`.
+# All paths below are ABSOLUTE on the analysis server; the workflow itself is
+# location-independent (run from any workdir).
+# ---------------------------------------------------------------------------
+[config]
+# Reference — GRCh38.d1.vd1 (GDC build; chr-prefixed contigs)
+genome_fa = "/home/data/reference/GRCh38.d1.vd1.fa"
+genome_fai = "/home/data/reference/GRCh38.d1.vd1.fa.fai"
+genome_dict = "/home/data/reference/GRCh38.d1.vd1.dict"
+bwa_prefix = "/home/data/reference/GRCh38.d1.vd1.fa"
+
+# Bulk-RNA alignment (built from GRCh38.d1.vd1.fa + GENCODE v47 GTF)
+star_index = "/home/data/reference/star_index_GRCh38_d1vd1"
+gencode_gtf = "/home/data/reference/gencode_v47/gencode.v47.primary_assembly.annotation.gtf"
+
+# Variant-calling resources (GATK resource bundle, hg38)
+dbsnp = "/home/data/reference/gatk-resources/hg38/Homo_sapiens_assembly38.dbsnp138.vcf.gz"
+mills = "/home/data/reference/gatk-resources/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"
+gnomad = "/home/data/reference/gatk-resources/hg38/af-only-gnomad.hg38.vcf.gz"
+pon = "/home/data/reference/gatk-resources/hg38/1000g_pon.hg38.vcf.gz"
+
+# VEP — vep-rs 0.3.1 with a JSON transcript cache (v113, GRCh38)
+vep_bin = "/home/data/reference/vep-rs/vep-0.3.1-x86_64-unknown-linux-gnu/vep"
+vep_cache_dir = "/home/data/reference/vep_cache"
+assembly = "GRCh38"
+
+# Single-cell reference (dnbc4tools genomeDir; includes STAR index + genes)
+scrna_reference = "/home/data/wsx/hnzl_data/processed/scRNA/ref/Homo_sapiens"
+scrna_bin = "/home/data/wsx/hnzl_data/processed/scRNA/software/dnbc4tools3.0/dnbc4tools"
+scrna_chemistry = "auto"
+scrna_min_umi = 1000
+
+# WES/panel mode: target intervals + captured Mb (TMB denominator). Empty
+# target_bed => WGS mode; TMB denominator = target_mb (default ~3000 Mb
+# callable WGS).
+target_bed = ""
+target_mb = 3000
+
+# CNV: tumor-only mode falls back to a prebuilt normal reference (.cnn).
+# CNV target argument fragment: "" for WGS; for WES/panel set e.g.
+# --targets /path/to/regions.bed (passed through verbatim to cnvkit batch).
+cnv_reference = "/home/data/reference/cnvkit_reference/hg38.wgs.reference.cnn"
+cnv_targets_args = ""
+
+# Pipeline helpers
+venus_tools = "scripts"
+workflow_file = "venus.oxoflow"
+
+# Samples whose raw FASTQs must exist as raw/<sample>_R1/R2 (WGS + bulk RNA
+# both feed fastp; WGS samples carry -TD/-B suffixes, bulk RNA -TR).
+# Single-cell rules use their own _SC/_SC-oligo naming via samples_scRNA.
+
+# Chromosomes scattered over for Mutect2 (must match reference contig names)
+chromosomes = [
+    "chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9",
+    "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17",
+    "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY",
+]
+
+# Base-recalibration: "true"/"false" (string; tested with when = comparisons)
+run_bqsr = "true"
+
+# ---------------------------------------------------------------------------
+# Chromosome scatter values
+# ---------------------------------------------------------------------------
+[[values]]
+name = "chr"
+values_from = "config.chromosomes"
+
+# ---------------------------------------------------------------------------
+# Modules
+# ---------------------------------------------------------------------------
+[[include]]
+path = "rules/qc.oxoflow"
+
+[[include]]
+path = "rules/align.oxoflow"
+
+[[include]]
+path = "rules/varcall.oxoflow"
+
+[[include]]
+path = "rules/varcall_merge.oxoflow"
+
+[[include]]
+path = "rules/annotation.oxoflow"
+
+[[include]]
+path = "rules/cnv.oxoflow"
+
+[[include]]
+path = "rules/rna.oxoflow"
+
+[[include]]
+path = "rules/scrna.oxoflow"
+
+[[include]]
+path = "rules/report.oxoflow"

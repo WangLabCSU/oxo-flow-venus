@@ -1,8 +1,10 @@
 /target/
 /Cargo.lock
 *.oxoflow
+!venus.oxoflow
 !rules/*.oxoflow
 results/
+.oxo-flow/
 .venus/
 .DS_Store
 *.bam
@@ -11,3 +13,4 @@ results/
 *.vcf.gz.tbi
 *.fastq.gz
 *.fq.gz
+scripts/__pycache__/
