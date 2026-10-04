@@ -3,10 +3,12 @@ name = "venus-qc"
 description = "Read QC and trimming: fastp + fastqc + multiqc"
 
 # Trim adapters/low-quality bases and produce per-sample QC reports.
-# Works for both WGS/WES (DNA) and bulk RNA FASTQs.
+# Works for both WGS/WES (DNA) and bulk RNA FASTQs; single-cell FASTQs are
+# processed raw by dnbc4tools and are excluded via the assay gate.
 [[rules]]
 name = "fastp"
 description = "Adapter and quality trimming with fastp"
+when = "wildcard.assay != 'scrna'"
 input = [
     "raw/{sample}_R1.fastq.gz",
     "raw/{sample}_R2.fastq.gz",
@@ -40,6 +42,7 @@ fastp \
 [[rules]]
 name = "fastqc"
 description = "FastQC quality report on trimmed reads"
+when = "wildcard.assay != 'scrna'"
 input = [
     "qc/trim/{sample}_R1.trim.fastq.gz",
     "qc/trim/{sample}_R2.trim.fastq.gz",
@@ -60,6 +63,8 @@ fastqc --threads {threads} -o qc/fastqc {input} 2> {log}
 # Cohort-wide MultiQC aggregation over fastp + fastqc outputs.
 # Declared {sample}-wildcard inputs would duplicate the expand_inputs entries,
 # so only the expansions are declared; the shell scans the workdir directly.
+# Expanded over DNA + bulkRNA groups (config.samples_<group> keys are
+# auto-injected from groups.tsv): scRNA samples have no fastp/fastqc outputs.
 [[rules]]
 name = "multiqc"
 description = "Aggregate all QC reports with MultiQC"
@@ -68,9 +73,12 @@ output = [
     "qc/multiqc/multiqc_data/multiqc_general_stats.txt",
 ]
 expand_inputs = [
-    { pattern = "qc/trim/{sample}.fastp.json", variables = { sample = "config.samples_list" } },
-    { pattern = "qc/fastqc/{sample}_R1.trim_fastqc.html", variables = { sample = "config.samples_list" } },
-    { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_list" } },
+    { pattern = "qc/trim/{sample}.fastp.json", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/trim/{sample}.fastp.json", variables = { sample = "config.samples_bulkRNA" } },
+    { pattern = "qc/fastqc/{sample}_R1.trim_fastqc.html", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/fastqc/{sample}_R1.trim_fastqc.html", variables = { sample = "config.samples_bulkRNA" } },
+    { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_bulkRNA" } },
 ]
 log = "logs/multiqc.log"
 threads = 4

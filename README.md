@@ -20,6 +20,32 @@ Analysis modes:
 - **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes.
 - **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel (Mutect2 `-L`, CNVkit `--targets` via `cnv_targets_args`, TMB denominator `target_mb`); leave empty for WGS.
 
+## Groups and assay gating
+
+`config/groups.tsv` maps sample ids to assay modules via three columns: `name`
+(group name), `samples` (comma-separated ids), and `assay` (a group metadata
+column that fans out per sample as the `wildcard.assay` value). Rules are
+gated per sample instance with `when`:
+
+- `when = "wildcard.assay == 'wgs'"` — DNA chain: fastp/fastqc run for DNA and
+  bulk RNA (any non-scRNA assay), but BWA-MEM2/MarkDuplicates/BQSR only for DNA.
+- `when = "wildcard.assay == 'rnaseq'"` — STAR + featureCounts.
+- `when = "wildcard.assay == 'scrna'"` — dnbc4tools counting (raw FASTQs; no trimming).
+- Gates may combine config flags: `when = "config.run_bqsr == 'true' && wildcard.assay == 'wgs'"`.
+
+The `assay` name is arbitrary — any metadata column in `groups.tsv` becomes a
+`wildcard.<key>` available to rules. A rule that mentions `{sample}` fans out
+over **every** group; the `when` gate then prunes non-matching instances at
+plan time, so `star_align` never tries to align a DNA sample. Rules that
+aggregate with `expand_inputs` should expand over per-group lists
+(`config.samples_DNA`, `config.samples_bulkRNA`, `config.samples_scRNA` —
+auto-injected from groups.tsv) rather than the global `config.samples_list`,
+which now mixes assays.
+
+Note: a sample id declared both in `groups.tsv` and in `pairs.tsv`
+(tumor/control) is allowed — the engine warns about duplicate owners but the
+rule paths here are group/pair-disjoint, so outputs never collide.
+
 Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstream of fastp; single-cell libraries are handled by dnbc4tools `--chemistry auto` (BGI DNBSEQ and 10x-style both supported).
 
 ## Repository layout
@@ -30,7 +56,7 @@ rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annota
 scripts/             # python helpers (MAF conversion, TMB, cohort tables, clinical report, …)
 envs/<mod>/pixi.toml # pixi environments, one dir per module (env specs in rules point here)
 config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
-config/groups.tsv    # sample groups (bulkRNA, scRNA)
+config/groups.tsv    # sample groups + assay metadata (DNA, bulkRNA, scRNA)
 ```
 
 ## Requirements
@@ -49,6 +75,7 @@ cd oxo-flow-venus
 #    raw/{sample}_R1.fastq.gz / raw/{sample}_R2.fastq.gz  (WGS + bulk RNA)
 #    single-cell FASTQs keep their library naming — see rules/scrna.oxoflow
 # 2. Edit config/pairs.tsv and config/groups.tsv for your cohort
+#    (groups.tsv assigns each sample id an assay: wgs / rnaseq / scrna)
 # 3. Point the absolute paths in venus.oxoflow [config] at your references
 
 # Validate, then run

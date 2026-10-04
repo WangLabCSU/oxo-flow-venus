@@ -3,9 +3,11 @@ name = "venus-align"
 description = "DNA alignment: BWA-MEM2 + samtools sort + Picard MarkDuplicates + BQSR"
 
 # BWA-MEM2 alignment with read-group header, coordinate-sorted BAM.
+# Gated to DNA samples via the groups.tsv `assay` column.
 [[rules]]
 name = "bwa_mem2"
 description = "Align reads to GRCh38 with BWA-MEM2"
+when = "wildcard.assay == 'wgs'"
 input = [
     "{config.genome_fa}",
     "qc/trim/{sample}_R1.trim.fastq.gz",
@@ -29,6 +31,7 @@ bwa-mem2 mem -t {threads} -R '{params.read_group}' \
 [[rules]]
 name = "mark_duplicates"
 description = "Mark PCR duplicates with Picard"
+when = "wildcard.assay == 'wgs'"
 input = ["align/{sample}/{sample}.sorted.bam"]
 output = [
     "align/{sample}/{sample}.markdup.bam",
@@ -68,7 +71,7 @@ log = "logs/bqsr/{sample}.log"
 threads = 8
 memory = "32G"
 environment = { pixi = "envs/varcall/pixi.toml" }
-when = "config.run_bqsr == 'true'"
+when = "config.run_bqsr == 'true' && wildcard.assay == 'wgs'"
 shell = """
 mkdir -p bqsr/{sample} logs/bqsr && \
 gatk --java-options "-Xmx{effective_memory_mb}m" BaseRecalibrator \

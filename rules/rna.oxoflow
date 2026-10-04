@@ -4,10 +4,11 @@ description = "Bulk RNA-seq: fastp trim + 2-pass STAR align + featureCounts quan
 
 # Trim (reuses the shared fastp rule from rules/qc.oxoflow — no duplicate here).
 
-# STAR 2-pass alignment per bulk-RNA sample.
+# STAR 2-pass alignment per bulk-RNA sample (gated via groups.tsv `assay`).
 [[rules]]
 name = "star_align"
 description = "2-pass STAR alignment of trimmed RNA reads"
+when = "wildcard.assay == 'rnaseq'"
 input = [
     "qc/trim/{sample}_R1.trim.fastq.gz",
     "qc/trim/{sample}_R2.trim.fastq.gz",
@@ -39,6 +40,7 @@ STAR \
 [[rules]]
 name = "featurecounts"
 description = "Gene-level quantification with featureCounts"
+when = "wildcard.assay == 'rnaseq'"
 input = [
     "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
     "{config.gencode_gtf}",

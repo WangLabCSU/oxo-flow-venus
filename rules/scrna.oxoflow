@@ -14,9 +14,11 @@ description = "Single-cell RNA-seq: c4-platform FASTQs â†’ dnbc4tools counting â
 # outs/singlecell.csv, outs/metrics_summary.xls.
 
 # FastQC on raw single-cell FASTQs (no trimming: dnbc4tools expects raw).
+# Gated via groups.tsv `assay` so these rules only fan over the scRNA group.
 [[rules]]
 name = "scrna_fastqc"
 description = "FastQC on raw single-cell FASTQs"
+when = "wildcard.assay == 'scrna'"
 input = [
     "raw/{sample}_SC_R1.fastq.gz",
     "raw/{sample}_SC_R2.fastq.gz",
@@ -40,6 +42,7 @@ fastqc --threads {threads} -o scrna/fastqc {input[0]} {input[1]} 2> {log}
 [[rules]]
 name = "scrna_count"
 description = "Cell calling and UMI counting (dnbc4tools rna run)"
+when = "wildcard.assay == 'scrna'"
 input = [
     "raw/{sample}_SC_R1.fastq.gz",
     "raw/{sample}_SC_R2.fastq.gz",
@@ -79,6 +82,7 @@ mkdir -p scrna/count logs/scrna_count && \
 [[rules]]
 name = "scrna_qc_cluster"
 description = "Summarize clusters and marker genes per sample"
+when = "wildcard.assay == 'scrna'"
 input = [
     "scrna/count/{sample}/analysis/cluster.csv",
     "scrna/count/{sample}/analysis/marker.csv",
