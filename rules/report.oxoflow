@@ -2,12 +2,14 @@
 name = "venus-report"
 description = "Cohort-level clinical report: methods from actual rule_runs, per-pair TMB, cohort summary, HTML delivery"
 
-# Methods section generated from .oxo-flow/checkpoint.json rule_runs — the
+# Methods section generated from the oxo-flow run checkpoint (rule_runs) — the
 # report describes the commands that ACTUALLY executed (methods = ground truth).
+# The checkpoint lives in .oxo-flow/ (engine-owned, not a rule product): the
+# shell reads it at execution time, so it is not declared as rule input.
 [[rules]]
 name = "methods_from_rule_runs"
 description = "Extract methods narrative from executed rule_runs"
-input = [".oxo-flow/checkpoint.json"]
+input = ["config/pairs.tsv"]
 output = ["report/methods_section.md"]
 threads = 2
 memory = "4G"
@@ -15,7 +17,7 @@ environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/methods_from_rule_runs.py \
-    --checkpoint {input[0]} \
+    --checkpoint .oxo-flow/checkpoint.json \
     --output {output[0]} \
     2> logs/methods_from_rule_runs.log
 """
