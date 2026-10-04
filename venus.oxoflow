@@ -49,7 +49,8 @@ assembly = "GRCh38"
 # Single-cell reference (dnbc4tools genomeDir; includes STAR index + genes)
 scrna_reference = "/home/data/wsx/hnzl_data/processed/scRNA/ref/Homo_sapiens"
 scrna_bin = "/home/data/wsx/hnzl_data/processed/scRNA/software/dnbc4tools3.0/dnbc4tools"
-scrna_chemistry = "auto"
+scrna_chemistry = "scRNAv2HT"
+scrna_darkreaction = "R1,R1"
 scrna_min_umi = 1000
 
 # WES/panel mode: target intervals + captured Mb (TMB denominator). Empty

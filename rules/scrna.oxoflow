@@ -74,6 +74,7 @@ mkdir -p scrna/count logs/scrna_count && \
     -o scrna/count \
     -t {threads} \
     --chemistry {config.scrna_chemistry} \
+    --darkreaction {config.scrna_darkreaction} \
     --minumi {config.scrna_min_umi} \
     2> {log}
 """
