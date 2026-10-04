@@ -48,6 +48,24 @@ rule paths here are group/pair-disjoint, so outputs never collide.
 
 Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstream of fastp; single-cell libraries are handled by dnbc4tools `--chemistry auto` (BGI DNBSEQ and 10x-style both supported).
 
+## Library strandedness
+
+`featureCounts` runs **unstranded** (`-s 0`, the rule sets no `-s` flag). For
+the bulk RNA-seq data this was verified empirically rather than assumed — on a
+200k read-pair subset of one sample aligned with STAR (93.4% unique, 147k
+spliced reads), three independent read-geometry checks against GENCODE exon
+structure all landed at ~50/50:
+
+| Check | Same-strand as R1 | Opposite | Verdict |
+|---|---|---|---|
+| R1 orientation vs GTF exon strand | 50.4% | 49.6% | unstranded |
+| R1 vs STAR `intronMotif` XS tag | 50.3% | 49.7% | unstranded |
+| R1 vs splice-donor GT/CT motif from FASTA | 49.4% | 50.6% | unstranded |
+
+Unstranded counting is strand-agnostic and remains correct regardless of the
+true library type; if your own library is known stranded, set `-s 1` (forward)
+or `-s 2` (reverse) in `rules/rna.oxoflow`.
+
 ## Repository layout
 
 ```
