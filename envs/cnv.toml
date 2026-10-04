@@ -1,0 +1,8 @@
+# Venus CNV environment — CNVkit copy-number calling from targeted/whole-genome data.
+[workspace]
+name = "venus-cnv"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+cnvkit = ">=0.9.10"

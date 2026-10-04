@@ -1,0 +1,98 @@
+[workflow]
+name = "venus-rna"
+description = "Bulk RNA-seq: fastp trim + 2-pass STAR align + featureCounts quantification"
+
+# Trim (reuses the shared fastp rule from rules/qc.oxoflow — no duplicate here).
+
+# STAR 2-pass alignment per bulk-RNA sample.
+[[rules]]
+name = "star_align"
+description = "2-pass STAR alignment of trimmed RNA reads"
+input = [
+    "qc/trim/{sample}_R1.trim.fastq.gz",
+    "qc/trim/{sample}_R2.trim.fastq.gz",
+]
+output = [
+    "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
+    "rna/star/{sample}/{sample}.Log.final.out",
+    "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
+]
+threads = 16
+memory = "64G"
+environment = { pixi = "envs/rna.toml" }
+shell = """
+mkdir -p rna/star/{sample} logs/rna_star && \
+STAR \
+    --runThreadN {threads} \
+    --genomeDir {config.star_index} \
+    --readFilesIn {input[0]} {input[1]} \
+    --readFilesCommand zcat \
+    --outFileNamePrefix rna/star/{sample}/{sample}. \
+    --twopassMode Basic \
+    --outSAMtype BAM SortedByCoordinate \
+    --quantMode GeneCounts \
+    --outSAMattrRGline ID:{sample} SM:{sample} PL:BGI \
+    2> logs/rna_star/{sample}.log
+"""
+
+# featureCounts gene-level counts (uses the STAR BAM).
+[[rules]]
+name = "featurecounts"
+description = "Gene-level quantification with featureCounts"
+input = [
+    "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
+    "{config.gencode_gtf}",
+]
+output = [
+    "rna/counts/{sample}.featurecounts.txt",
+    "rna/counts/{sample}.featurecounts.summary",
+]
+threads = 8
+memory = "16G"
+environment = { pixi = "envs/rna.toml" }
+shell = """
+mkdir -p rna/counts logs && \
+featureCounts \
+    -T {threads} \
+    -a {input[1]} \
+    -o {output[0]} \
+    -t exon -g gene_id \
+    -p --countReadPairs \
+    -B -C \
+    {input[0]} \
+    2> logs/featurecounts_{sample}.log
+"""
+
+# Merge per-sample counts into the cohort gene-count matrix.
+[[rules]]
+name = "merge_counts"
+description = "Merge per-sample featureCounts into cohort matrix"
+expand_inputs = [{ pattern = "rna/counts/{sample}.featurecounts.txt", variables = { sample = "config.samples_bulkRNA" } }]
+output = ["rna/counts/cohort.gene_counts.txt"]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p rna/counts logs && \
+python {config.venus_tools}/merge_counts.py \
+    --inputs {input} \
+    --output {output} \
+    2> logs/merge_counts.log
+"""
+
+# Per-sample alignment/QC metrics summary (from STAR logs).
+[[rules]]
+name = "rna_qc_summary"
+description = "Summarize per-sample STAR alignment metrics"
+expand_inputs = [{ pattern = "rna/star/{sample}/{sample}.Log.final.out", variables = { sample = "config.samples_bulkRNA" } }]
+output = ["rna/qc/rna_qc_summary.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p rna/qc logs && \
+python {config.venus_tools}/summarize_star_logs.py \
+    --logs {input} \
+    --output {output} \
+    2> logs/rna_qc_summary.log
+"""

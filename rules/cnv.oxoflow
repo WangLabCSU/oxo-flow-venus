@@ -1,0 +1,70 @@
+[workflow]
+name = "venus-cnv"
+description = "Somatic copy-number calling with CNVkit (paired and tumor-only)"
+
+# CNVkit batch: paired mode builds the reference from the matched normal;
+# tumor-only falls back to a prebuilt normal reference .cnn (config.cnv_reference).
+# WGS mode (default): no --targets; CNVkit bins the whole genome. For WES/panel
+# runs set config.cnv_targets_args = "--targets /path/to/targets.bed" and leave
+# cnv_targets unset in inputs (passed through as an argument fragment).
+[[rules]]
+name = "cnvkit_paired"
+description = "CNVkit batch with matched normal"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{control}/{control}.bqsr.bam",
+    "{config.genome_fa}",
+]
+output = [
+    "cnv/{pair_id}/reference.cnn",
+    "cnv/{pair_id}/{pair_id}.cnr",
+    "cnv/{pair_id}/{pair_id}.call.cns",
+    "cnv/{pair_id}/{pair_id}.cnv.png",
+]
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/cnv.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p cnv/{pair_id} logs && \
+cnvkit.py batch {input[0]} \
+    --normal {input[1]} \
+    --fasta {input[2]} \
+    --method wgs \
+    {config.cnv_targets_args} \
+    --output-reference cnv/{pair_id}/reference.cnn \
+    --output-dir cnv/{pair_id} \
+    --diagram --scatter \
+    --parallel {threads} \
+    2> logs/cnvkit_{pair_id}.log
+"""
+
+[[rules]]
+name = "cnvkit_tumoronly"
+description = "CNVkit batch without matched normal (uses prebuilt reference)"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "{config.genome_fa}",
+    "{config.cnv_reference}",
+]
+output = [
+    "cnv/{pair_id}/{pair_id}.cnr",
+    "cnv/{pair_id}/{pair_id}.call.cns",
+    "cnv/{pair_id}/{pair_id}.cnv.png",
+]
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/cnv.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p cnv/{pair_id} logs && \
+cnvkit.py batch {input[0]} \
+    --fasta {input[1]} \
+    --method wgs \
+    {config.cnv_targets_args} \
+    --reference {input[2]} \
+    --output-dir cnv/{pair_id} \
+    --diagram --scatter \
+    --parallel {threads} \
+    2> logs/cnvkit_{pair_id}.log
+"""

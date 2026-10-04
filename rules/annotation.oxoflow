@@ -1,19 +1,69 @@
-# Venus Annotation Module - VEP
+[workflow]
+name = "venus-annotation"
+description = "vep-rs functional annotation + VCF→MAF conversion for the delivery VCF"
 
+# Annotate PASS somatic variants with vep-rs (default engine; Perl VEP optional).
+# vep-rs 0.3.1 verified flags: -i/--input_file, -o/--output_file, --vcf,
+# --json_cache <DIR> (JSON transcript cache), -a/--assembly, --hgvs (needs
+# --fasta), --pick, --symbol --biotype --canonical --protein --numbers
+# --domains --check_existing. Output is plain VCF (vep-rs does not bgzip);
+# we bgzip+tabix afterwards so downstream tooling can consume it directly.
 [[rules]]
-name = "vep_{sample}"
-input = ["{output_dir}/variants/{sample}.filtered.vcf.gz"]
-output = ["{output_dir}/annotated/{sample}.annotated.vcf.gz"]
-log = "{output_dir}/logs/vep_{sample}.log"
+name = "vep_annotate"
+description = "Annotate PASS somatic VCF with vep-rs"
+input = [
+    "deliver/{pair_id}.somatic.pass.vcf.gz",
+    "{config.genome_fa}",
+]
+output = [
+    "deliver/{pair_id}.somatic.pass.vep.vcf.gz",
+    "deliver/{pair_id}.somatic.pass.vep.vcf.gz.tbi",
+]
+threads = 4
+memory = "16G"
+environment = { pixi = "envs/varcall.toml" }
 shell = """
-vep --input_file {input[0]} \
-    --output_file {output[0]} \
-    --format vcf \
+mkdir -p deliver logs && \
+{config.vep_bin} \
+    --input_file {input[0]} \
+    --output_file deliver/{pair_id}.somatic.pass.vep.vcf \
     --vcf \
-    --offline \
-    --cache \
-    --dir_cache {vep_cache} \
-    --assembly {genome_build} \
-    --fork {threads} 2> {log}
+    --json_cache {config.vep_cache_dir} \
+    --assembly {config.assembly} \
+    --fasta {input[1]} \
+    --hgvs \
+    --pick \
+    --symbol \
+    --biotype \
+    --canonical \
+    --protein \
+    --numbers \
+    --domains \
+    --check_existing \
+    --fork {threads} \
+    --no_stats \
+    2> logs/vep_{pair_id}.log && \
+bgzip -f deliver/{pair_id}.somatic.pass.vep.vcf && \
+tabix -f -p vcf {output[0]}
 """
-env_group = "vep"
+
+# VCF → MAF (one per tumor sample; zero Perl deps, reads vep-rs CSQ field).
+[[rules]]
+name = "vcf2maf"
+description = "Convert annotated VCF to MAF format"
+input = ["deliver/{pair_id}.somatic.pass.vep.vcf.gz"]
+output = [
+    "deliver/{pair_id}.maf",
+]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p deliver logs && \
+python {config.venus_tools}/vcf2maf_light.py \
+    --vcf {input[0]} \
+    --output {output[0]} \
+    --tumor-id '{experiment}' \
+    --normal-id '{control}' \
+    2> logs/vcf2maf_{pair_id}.log
+"""

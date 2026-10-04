@@ -1,0 +1,16 @@
+# Venus single-cell environment — scRNA-seq processing with scanpy.
+# Note: numpy pinned <2.2 for scanpy/scrublet compatibility.
+[workspace]
+name = "venus-scrna"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+star = "*"
+scanpy = ">=1.10"
+leidenalg = "*"
+igraph = "*"
+scrublet = "*"
+h5py = "*"
+numpy = "<2.2"

@@ -1,0 +1,117 @@
+[workflow]
+name = "venus-scrna"
+description = "Single-cell RNA-seq: c4-platform FASTQs → dnbc4tools counting → per-sample QC/clustering → cohort summary"
+
+# Single-cell FASTQs from the c4 platform: Pt{NN}-SC_R{1,2} (cDNA) +
+# Pt{NN}-SC-oligo_R{1,2} (oligo/sample index). The raw/ stage symlinks these
+# under the same names. dnbc4tools 3.0 verified CLI:
+#   dnbc4tools rna run -n NAME -c1 cDNA_R1 -c2 cDNA_R2 -i1 oligo_R1 -i2 oligo_R2
+#                      -g genomeDir -o outdir -t threads
+#                      [--chemistry auto|scRNAv1HT|scRNAv2HT|scRNAv3HT|scRNAv5P]
+#                      [--calling_method emptydrops|barcoderanks] [--minumi N]
+# Real outputs: outs/raw_matrix/{matrix.mtx.gz,features.tsv.gz,barcodes.tsv.gz},
+# outs/filter_feature.h5ad, outs/analysis/{QC_Cluster.h5ad,marker.csv,cluster.csv},
+# outs/singlecell.csv, outs/metrics_summary.xls.
+
+# FastQC on raw single-cell FASTQs (no trimming: dnbc4tools expects raw).
+[[rules]]
+name = "scrna_fastqc"
+description = "FastQC on raw single-cell FASTQs"
+input = [
+    "raw/{sample}_SC_R1.fastq.gz",
+    "raw/{sample}_SC_R2.fastq.gz",
+    "raw/{sample}_SC-oligo_R1.fastq.gz",
+    "raw/{sample}_SC-oligo_R2.fastq.gz",
+]
+output = [
+    "scrna/fastqc/{sample}_SC_R1_fastqc.html",
+    "scrna/fastqc/{sample}_SC_R2_fastqc.html",
+]
+log = "logs/scrna_fastqc/{sample}.log"
+threads = 4
+memory = "4G"
+environment = { pixi = "envs/qc.toml" }
+shell = """
+mkdir -p scrna/fastqc logs/scrna_fastqc && \
+fastqc --threads {threads} -o scrna/fastqc {input[0]} {input[1]} 2> {log}
+"""
+
+# Cell calling + UMI counting (dnbc4tools rna run; outputs under <outdir>/<name>/outs/).
+[[rules]]
+name = "scrna_count"
+description = "Cell calling and UMI counting (dnbc4tools rna run)"
+input = [
+    "raw/{sample}_SC_R1.fastq.gz",
+    "raw/{sample}_SC_R2.fastq.gz",
+    "raw/{sample}_SC-oligo_R1.fastq.gz",
+    "raw/{sample}_SC-oligo_R2.fastq.gz",
+]
+output = [
+    "scrna/count/{sample}/raw_matrix/matrix.mtx.gz",
+    "scrna/count/{sample}/raw_matrix/features.tsv.gz",
+    "scrna/count/{sample}/raw_matrix/barcodes.tsv.gz",
+    "scrna/count/{sample}/filter_feature.h5ad",
+    "scrna/count/{sample}/analysis/cluster.csv",
+    "scrna/count/{sample}/analysis/marker.csv",
+    "scrna/count/{sample}/metrics_summary.xls",
+]
+log = "logs/scrna_count/{sample}.log"
+threads = 16
+memory = "64G"
+environment = { pixi = "envs/scrna.toml" }
+shell = """
+mkdir -p scrna/count logs/scrna_count && \
+{config.scrna_bin} rna run \
+    -n {sample} \
+    -c1 {input[0]} \
+    -c2 {input[1]} \
+    -i1 {input[2]} \
+    -i2 {input[3]} \
+    -g {config.scrna_reference} \
+    -o scrna/count \
+    -t {threads} \
+    --chemistry {config.scrna_chemistry} \
+    --minumi {config.scrna_min_umi} \
+    2> {log}
+"""
+
+# Per-sample cluster/marker summary (pure-python over dnbc4tools outputs).
+[[rules]]
+name = "scrna_qc_cluster"
+description = "Summarize clusters and marker genes per sample"
+input = [
+    "scrna/count/{sample}/analysis/cluster.csv",
+    "scrna/count/{sample}/analysis/marker.csv",
+]
+output = [
+    "scrna/qc/{sample}.clusters.tsv",
+]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p scrna/qc logs && \
+python {config.venus_tools}/scrna_qc_cluster.py \
+    --cluster {input[0]} \
+    --markers {input[1]} \
+    --sample {sample} \
+    --output {output[0]} \
+    2> logs/scrna_qc_cluster_{sample}.log
+"""
+
+# Cohort-level single-cell summary table.
+[[rules]]
+name = "scrna_integrate"
+description = "Aggregate per-sample cluster tables into cohort summary"
+expand_inputs = [{ pattern = "scrna/qc/{sample}.clusters.tsv", variables = { sample = "config.samples_scRNA" } }]
+output = ["scrna/cohort_clusters.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p logs && \
+python {config.venus_tools}/scrna_integrate.py \
+    --clusters {input} \
+    --output {output} \
+    2> logs/scrna_integrate.log
+"""

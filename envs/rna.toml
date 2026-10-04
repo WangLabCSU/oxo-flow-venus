@@ -1,0 +1,11 @@
+# Venus bulk RNA-seq environment — STAR alignment, featureCounts quantification.
+[workspace]
+name = "venus-rna"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+star = ">=2.7.11b"
+samtools = ">=1.21"
+fastp = ">=0.24"
+subread = ">=2.0.6"

@@ -1,27 +1,82 @@
-# Venus QC Module - fastp and FastQC
+[workflow]
+name = "venus-qc"
+description = "Read QC and trimming: fastp + fastqc + multiqc"
 
+# Trim adapters/low-quality bases and produce per-sample QC reports.
+# Works for both WGS/WES (DNA) and bulk RNA FASTQs.
 [[rules]]
-name = "fastp_{sample}"
-input = ["{sample_r1}", "{sample_r2}"]
-output = ["{output_dir}/trimmed/{sample}_R1.fq.gz", "{output_dir}/trimmed/{sample}_R2.fq.gz"]
-log = "{output_dir}/logs/fastp_{sample}.log"
+name = "fastp"
+description = "Adapter and quality trimming with fastp"
+input = [
+    "raw/{sample}_R1.fastq.gz",
+    "raw/{sample}_R2.fastq.gz",
+]
+output = [
+    "qc/trim/{sample}_R1.trim.fastq.gz",
+    "qc/trim/{sample}_R2.trim.fastq.gz",
+    "qc/trim/{sample}.fastp.json",
+    "qc/trim/{sample}.fastp.html",
+]
+log = "logs/fastp/{sample}.log"
+threads = 8
+memory = "16G"
+environment = { pixi = "envs/qc.toml" }
 shell = """
-fastp -i {input[0]} -I {input[1]} \
-    -o {output[0]} -O {output[1]} \
+mkdir -p qc/trim logs/fastp && \
+fastp \
+    --in1 {input[0]} --in2 {input[1]} \
+    --out1 {output[0]} --out2 {output[1]} \
+    --json {output[2]} --html {output[3]} \
+    --thread {threads} \
     --detect_adapter_for_pe \
-    --cut_front --cut_tail \
-    --json {output_dir}/qc/{sample}_fastp.json \
-    --html {output_dir}/qc/{sample}_fastp.html \
-    --thread {threads} 2> {log}
+    --cut_right --cut_right_window_size 4 --cut_right_mean_quality 20 \
+    --qualified_quality_phred 20 --unqualified_percent_limit 30 \
+    --n_base_limit 5 \
+    --length_required 50 \
+    2> {log}
 """
-env_group = "qc"
 
+# Per-sample FastQC on trimmed reads.
 [[rules]]
-name = "fastqc_{sample}"
-input = ["{sample_r1}", "{sample_r2}"]
-output = ["{output_dir}/qc/{sample}_R1_fastqc.html", "{output_dir}/qc/{sample}_R2_fastqc.html"]
-log = "{output_dir}/logs/fastqc_{sample}.log"
+name = "fastqc"
+description = "FastQC quality report on trimmed reads"
+input = [
+    "qc/trim/{sample}_R1.trim.fastq.gz",
+    "qc/trim/{sample}_R2.trim.fastq.gz",
+]
+output = [
+    "qc/fastqc/{sample}_R1.trim_fastqc.html",
+    "qc/fastqc/{sample}_R2.trim_fastqc.html",
+]
+log = "logs/fastqc/{sample}.log"
+threads = 4
+memory = "4G"
+environment = { pixi = "envs/qc.toml" }
 shell = """
-fastqc -t {threads} -o {output_dir}/qc/ {input[0]} {input[1]} 2> {log}
+mkdir -p qc/fastqc logs/fastqc && \
+fastqc --threads {threads} -o qc/fastqc {input} 2> {log}
 """
-env_group = "qc"
+
+# Cohort-wide MultiQC aggregation over fastp + fastqc outputs.
+# Declared {sample}-wildcard inputs would duplicate the expand_inputs entries,
+# so only the expansions are declared; the shell scans the workdir directly.
+[[rules]]
+name = "multiqc"
+description = "Aggregate all QC reports with MultiQC"
+output = [
+    "qc/multiqc/multiqc_report.html",
+    "qc/multiqc/multiqc_data/multiqc_general_stats.txt",
+]
+expand_inputs = [
+    { pattern = "qc/trim/{sample}.fastp.json", variables = { sample = "config.samples_list" } },
+    { pattern = "qc/fastqc/{sample}_R1.trim_fastqc.html", variables = { sample = "config.samples_list" } },
+    { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_list" } },
+]
+log = "logs/multiqc.log"
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/qc.toml" }
+shell = """
+mkdir -p qc/multiqc logs && \
+multiqc . --filename multiqc_report --outdir qc/multiqc --force 2> {log}
+"""

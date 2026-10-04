@@ -1,25 +1,113 @@
-# Venus Report Module - Clinical report generation
+[workflow]
+name = "venus-report"
+description = "Cohort-level clinical report: methods from actual rule_runs, per-pair TMB, cohort summary, HTML delivery"
 
+# Methods section generated from .oxo-flow/checkpoint.json rule_runs — the
+# report describes the commands that ACTUALLY executed (methods = ground truth).
 [[rules]]
-name = "tmb_calculation_{sample}"
-input = ["{output_dir}/annotated/{sample}.annotated.vcf.gz"]
-output = ["{output_dir}/tmb/{sample}.tmb.txt"]
-log = "{output_dir}/logs/tmb_{sample}.log"
+name = "methods_from_rule_runs"
+description = "Extract methods narrative from executed rule_runs"
+input = [".oxo-flow/checkpoint.json"]
+output = ["report/methods_section.md"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
 shell = """
-Rscript scripts/tmb_calculation.R \
-    --input {input[0]} \
-    --output {output[0]} 2> {log}
+mkdir -p report logs && \
+python {config.venus_tools}/methods_from_rule_runs.py \
+    --checkpoint {input[0]} \
+    --output {output[0]} \
+    2> logs/methods_from_rule_runs.log
 """
-env_group = "report"
 
+# Per-pair TMB (mutations/Mb) from the delivery MAF (one-row TSV per pair).
 [[rules]]
-name = "clinical_report_{sample}"
-input = ["{output_dir}/annotated/{sample}.annotated.vcf.gz", "{output_dir}/tmb/{sample}.tmb.txt"]
-output = ["{output_dir}/reports/{sample}_clinical_report.html"]
-log = "{output_dir}/logs/report_{sample}.log"
+name = "tmb_per_pair"
+description = "Compute TMB per pair from delivery MAF"
+input = ["deliver/{pair_id}.maf"]
+output = ["report/tmb/{pair_id}.tmb.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
 shell = """
-Rscript -e "rmarkdown::render('scripts/clinical_report.Rmd', \
-    output_file='{output[0]}', \
-    params=list(sample='{sample}', vcf='{input[0]}', tmb='{input[1]}'))" 2> {log}
+mkdir -p report/tmb logs && \
+python {config.venus_tools}/tmb_from_maf.py \
+    --mafs {input[0]} \
+    --target-mb {config.target_mb} \
+    --output {output[0]} \
+    2> logs/tmb_{pair_id}.log
 """
-env_group = "report"
+
+# Cohort single-cell metrics table from dnbc4tools metrics_summary.xls files.
+[[rules]]
+name = "scrna_metrics_cohort"
+description = "Collect per-sample single-cell metrics into cohort table"
+expand_inputs = [
+    { pattern = "scrna/count/{sample}/metrics_summary.xls", variables = { sample = "config.samples_scRNA" } },
+]
+output = ["report/scrna_metrics.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/scrna_metrics.py \
+    --metrics {input} \
+    --samples {config.samples_scRNA} \
+    --output {output[0]} \
+    2> logs/scrna_metrics.log
+"""
+
+# Aggregate TMB + RNA QC + single-cell metrics into one cohort table.
+# Input ordering: declared inputs first (rna_qc_summary = {input[0]},
+# scrna_metrics = {input[1]}), then expanded TMB tables appended
+# ({input[2]}..{input[11]}) — cohort_tables.py maps flags accordingly.
+[[rules]]
+name = "cohort_tables"
+description = "Outer-join per-module tables into cohort summary"
+input = [
+    "rna/qc/rna_qc_summary.tsv",
+    "report/scrna_metrics.tsv",
+]
+expand_inputs = [
+    { pattern = "report/tmb/{pair_id}.tmb.tsv", variables = { pair_id = "config.pairs_list" } },
+]
+output = ["report/cohort_summary.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/cohort_tables.py \
+    --rna-qc {input[0]} \
+    --scrna-metrics {input[1]} \
+    --tmb {input[2]} \
+    --output {output[0]} \
+    2> logs/cohort_tables.log
+"""
+
+# Final clinical report (Markdown + HTML), methods from actual execution.
+[[rules]]
+name = "clinical_report"
+description = "Render final cohort report (Markdown + HTML)"
+input = [
+    "report/methods_section.md",
+    "report/cohort_summary.tsv",
+]
+output = [
+    "report/venus_clinical_report.md",
+    "report/venus_clinical_report.html",
+]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/clinical_report.py \
+    --methods {input[0]} \
+    --tmb {input[1]} \
+    --pairs config/pairs.tsv \
+    --output-md {output[0]} \
+    --output-html {output[1]} \
+    2> logs/clinical_report.log
+"""

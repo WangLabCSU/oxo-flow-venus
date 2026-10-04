@@ -1,120 +1,78 @@
 # Venus (启明星)
 
-**Venus** (启明星 — "Morning Star") is a clinical-grade tumor variant detection pipeline built on [oxo-flow](https://github.com/Traitome/oxo-flow).
+**Venus** is a tumor multi-omics pipeline built on [oxo-flow](https://github.com/Traitome/oxo-flow), covering the full path from raw FASTQ to a cohort clinical report: somatic SNV/indel calling, copy-number analysis, bulk RNA-seq, single-cell RNA-seq, and an auto-generated methods section.
 
-## Features
+## What it does
 
-- **Multiple Analysis Modes**
-  - `experiment_only`: Tumor-only somatic calling
-  - `control_only`: Germline variant calling
-  - `experiment_control`: Paired tumor-normal analysis
+| Module | Tools | Outputs |
+|---|---|---|
+| QC | fastp, FastQC, MultiQC | trimmed FASTQs, `qc/multiqc/multiqc_report.html` |
+| DNA alignment | BWA-MEM2, Picard MarkDuplicates, GATK BQSR | sorted BAM + BAI per sample |
+| Somatic calling | GATK Mutect2 (per-chromosome scatter) + FilterMutectCalls with orientation-bias priors | per-pair VCF (PASS), `stats`, MAF |
+| Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
+| CNV | CNVkit (`wgs` method; `--reference` for tumor-only) | per-pair CNV profiles |
+| Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics |
+| Single-cell | dnbc4tools (chemistry auto), scanpy | count matrix, QC/clustering metrics |
+| Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
 
-- **Sequencing Support**
-  - Whole Genome Sequencing (WGS)
-  - Whole Exome Sequencing (WES)
-  - Targeted Panel Sequencing
+Analysis modes:
+- **Paired tumor–normal** (`pairs.tsv` with a control sample) — Mutect2 tumor/normal, CNVkit `--normal`.
+- **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes.
+- **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel (Mutect2 `-L`, CNVkit `--targets` via `cnv_targets_args`, TMB denominator `target_mb`); leave empty for WGS.
 
-- **Core Tools**
-  - **fastp/FastQC**: Quality control and trimming
-  - **BWA-MEM2**: Read alignment
-  - **GATK 4**: MarkDuplicates, BQSR, Mutect2, HaplotypeCaller
-  - **Strelka2**: Alternative somatic caller (paired mode)
-  - **VEP**: Variant annotation
+Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstream of fastp; single-cell libraries are handled by dnbc4tools `--chemistry auto` (BGI DNBSEQ and 10x-style both supported).
 
-## Installation
+## Repository layout
 
-### From Source
+```
+venus.oxoflow        # main workflow: config + include list + chromosome scatter
+rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation, cnv, rna, scrna, report)
+scripts/             # python helpers (MAF conversion, TMB, cohort tables, clinical report, …)
+envs/*.toml          # pixi environments, one per module (resolved into the workflow's pixi env dir)
+config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
+config/groups.tsv    # sample groups (bulkRNA, scRNA)
+```
+
+## Requirements
+
+- Linux x86-64, oxo-flow CLI ≥ 0.23
+- [pixi](https://pixi.sh) on PATH (workflow environments are resolved per rule into `.oxo-flow/pixi/`)
+- Reference data (see `venus.oxoflow [config]` for the exact keys): GRCh38 FASTA + BWA-MEM2 index, STAR index + GENCODE GTF, GATK resource bundle (dbsnp/mills/gnomad/PoN), vep-rs binary + JSON cache, single-cell reference for dnbc4tools, CNVkit normal reference for tumor-only CNV.
+
+## Quick start
 
 ```bash
 git clone https://github.com/WangLabCSU/oxo-flow-venus.git
 cd oxo-flow-venus
-cargo install --path .
+
+# 1. Stage inputs (relative to your run workdir)
+#    raw/{sample}_R1.fastq.gz / raw/{sample}_R2.fastq.gz  (WGS + bulk RNA)
+#    single-cell FASTQs keep their library naming — see rules/scrna.oxoflow
+# 2. Edit config/pairs.tsv and config/groups.tsv for your cohort
+# 3. Point the absolute paths in venus.oxoflow [config] at your references
+
+# Validate, then run
+oxo-flow validate
+oxo-flow run --background
+
+# Reports land in report/ ; delivery files in deliver/
 ```
 
-### Prerequisites
-
-- Rust 1.75+ (for building)
-- conda/mamba (for environments)
-- oxo-flow CLI (`cargo install oxo-flow`)
-
-## Quick Start
-
-1. **Create a configuration file** (`config.toml`):
-
-```toml
-name = "venus_pipeline"
-mode = "experiment_control"
-seq_type = "wes"
-genome_build = "GRCh38"
-reference_fasta = "/path/to/genome.fa"
-target_bed = "/path/to/exome.bed"
-
-[[samples]]
-name = "TUMOR"
-type = "tumor"
-r1 = "TUMOR_R1.fq.gz"
-r2 = "TUMOR_R2.fq.gz"
-pair_id = "NORMAL"
-
-[[samples]]
-name = "NORMAL"
-type = "normal"
-r1 = "NORMAL_R1.fq.gz"
-r2 = "NORMAL_R2.fq.gz"
-```
-
-2. **Generate workflow**:
+Every config key can be overridden per run without editing the file:
 
 ```bash
-venus generate config.toml -o venus.oxoflow
+oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg target_mb=34
 ```
 
-3. **Run pipeline**:
+## Outputs of note
 
-```bash
-oxo-flow run venus.oxoflow -j 8
-```
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `venus generate <config>` | Generate .oxoflow workflow file |
-| `venus validate <config>` | Validate configuration |
-| `venus list-steps` | List pipeline steps |
-
-## Pipeline Steps
-
-1. **fastp** — FASTQ QC and trimming
-2. **BWA-MEM2** — Read alignment
-3. **MarkDuplicates** — PCR duplicate marking
-4. **BQSR** — Base quality recalibration
-5. **Mutect2** — Somatic variant calling
-6. **FilterMutectCalls** — Variant filtering
-7. **Strelka2** — Alternative somatic caller (paired mode)
-8. **VEP** — Variant annotation
-9. **Clinical Report** — Report generation
-
-## Output Structure
-
-```
-results/
-├── trimmed/          # Trimmed FASTQ
-├── aligned/          # Aligned BAM
-├── dedup/            # Deduplicated BAM
-├── recal/            # Recalibrated BAM
-├── variants/         # VCF files
-├── annotated/        # Annotated VCF
-├── tmb/              # TMB calculations
-└── reports/          # Clinical reports
-```
+- `deliver/{pair_id}.somatic.pass.vcf.gz` — PASS somatic variants (unannotated)
+- `deliver/{pair_id}.somatic.pass.vep.vcf.gz` — VEP-annotated VCF
+- `deliver/{pair_id}.maf` — MAF (2.4.1 subset) for downstream TMB/mutational-signature tools
+- `report/tmb/{pair_id}.tmb.tsv` — TMB (mut/Mb, non-silent coding)
+- `report/clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
+- `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
 
 ## License
 
-Apache-2.0
-
-## Links
-
-- [oxo-flow](https://github.com/WangLabCSU/oxo-flow)
-- [GATK](https://gatk.broadinstitute.org/)
-- [VEP](https://www.ensembl.org/vep)
+MIT — see [LICENSE](LICENSE).

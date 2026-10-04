@@ -1,0 +1,10 @@
+# Venus variant calling environment — GATK4 Mutect2, bcftools/htslib for VCF ops.
+[workspace]
+name = "venus-varcall"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+gatk4 = ">=4.6.1.0"
+bcftools = ">=1.21"
+htslib = ">=1.21"

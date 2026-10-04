@@ -1,0 +1,79 @@
+[workflow]
+name = "venus-varcall"
+description = "Somatic SNV/indel calling: per-chromosome Mutect2 scatter (paired / tumor-only via when-gating), later merged per pair"
+
+# Per-chromosome Mutect2. Paired and tumor-only variants share the SAME output
+# paths — the engine instantiates exactly one per (pair_id, chr) based on
+# whether the pair declares a control sample.
+# Each Mutect2 instance writes three files:
+#   {chr}.vcf.gz        — unfiltered calls
+#   {chr}.vcf.gz.stats  — depth stats (auto side-output, needed by
+#                         MergeMutectStats + FilterMutectCalls thresholding)
+#   {chr}.tar.gz        — F1R2 counts for LearnReadOrientationModel
+# Chunks land in per-pair directories so multiple pairs never collide.
+[[rules]]
+name = "mutect2_paired"
+description = "Per-chromosome Mutect2 with matched normal"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{experiment}/{experiment}.bqsr.bai",
+    "bqsr/{control}/{control}.bqsr.bam",
+    "bqsr/{control}/{control}.bqsr.bai",
+    "{config.genome_fa}",
+    "{config.genome_dict}",
+    "{config.gnomad}",
+    "{config.pon}",
+]
+output = [
+    "vcf.raw/{pair_id}/{chr}.vcf.gz",
+    "vcf.raw/{pair_id}/{chr}.vcf.gz.stats",
+    "vcf.raw/{pair_id}/{chr}.tar.gz",
+]
+threads = 4
+memory = "16G"
+environment = { pixi = "envs/varcall.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p vcf.raw/{pair_id} logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" Mutect2 \
+    -R {input[4]} \
+    -I {input[0]} -I {input[2]} \
+    -normal {control} \
+    -L {chr} \
+    --germline-resource {input[6]} \
+    --panel-of-normals {input[7]} \
+    --f1r2-tar-gz vcf.raw/{pair_id}/{chr}.tar.gz \
+    -O {output[0]} \
+    2> logs/mutect2_{pair_id}_{chr}.log
+"""
+
+[[rules]]
+name = "mutect2_tumoronly"
+description = "Per-chromosome Mutect2 without matched normal"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{experiment}/{experiment}.bqsr.bai",
+    "{config.genome_fa}",
+    "{config.genome_dict}",
+    "{config.gnomad}",
+]
+output = [
+    "vcf.raw/{pair_id}/{chr}.vcf.gz",
+    "vcf.raw/{pair_id}/{chr}.vcf.gz.stats",
+    "vcf.raw/{pair_id}/{chr}.tar.gz",
+]
+threads = 4
+memory = "16G"
+environment = { pixi = "envs/varcall.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p vcf.raw/{pair_id} logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" Mutect2 \
+    -R {input[2]} \
+    -I {input[0]} \
+    -L {chr} \
+    --germline-resource {input[4]} \
+    --f1r2-tar-gz vcf.raw/{pair_id}/{chr}.tar.gz \
+    -O {output[0]} \
+    2> logs/mutect2_{pair_id}_{chr}.log
+"""

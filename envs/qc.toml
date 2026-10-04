@@ -1,0 +1,11 @@
+# Venus QC environment — reads trimming, per-sample QC reports, cohort aggregation.
+# Standalone pixi manifest; invoked via `pixi run --manifest-path envs/qc.toml`.
+[workspace]
+name = "venus-qc"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+fastp = ">=0.24"
+fastqc = ">=0.12.1"
+multiqc = ">=1.25"

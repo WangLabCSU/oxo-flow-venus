@@ -1,0 +1,10 @@
+# Venus alignment environment — BWA-MEM2 alignment, sorting, duplicate marking, BQSR prep.
+[workspace]
+name = "venus-align"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+bwa-mem2 = ">=2.2.1"
+samtools = ">=1.21"
+picard = ">=3.1"

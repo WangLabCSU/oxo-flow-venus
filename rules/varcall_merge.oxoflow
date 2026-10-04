@@ -1,0 +1,112 @@
+[workflow]
+name = "venus-varcall-merge"
+description = "Per-pair VCF merge (GatherVcfs across chromosomes) + stats merge + LearnReadOrientationModel + FilterMutectCalls"
+
+# Merge per-chromosome VCFs into one per-pair VCF. expand_inputs fans out
+# over config.chromosomes in declaration order — GatherVcfs requires
+# chromosome-sorted input order, which config.chromosomes provides.
+[[rules]]
+name = "gather_chr_vcfs"
+description = "Concatenate per-chromosome Mutect2 VCFs (GATK GatherVcfs)"
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz", variables = { chr = "config.chromosomes" } }]
+output = ["vcf.raw/{pair_id}.vcf.gz"]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/varcall.toml" }
+shell = """
+mkdir -p vcf.raw logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs \
+    -I {input} \
+    -O {output} \
+    2> logs/gather_{pair_id}.log
+"""
+
+# Mutect2 writes one .stats file per chromosome chunk. FilterMutectCalls
+# thresholds against exactly the stats of the VCF it filters, so the scattered
+# stats must be merged into one per-pair file first (MergeMutectStats expects
+# stats from a single scatter, in the same order as the VCF merge).
+[[rules]]
+name = "merge_mutect_stats"
+description = "Merge per-chromosome Mutect2 stats (GATK MergeMutectStats)"
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz.stats", variables = { chr = "config.chromosomes" } }]
+output = ["vcf.raw/{pair_id}.stats"]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/varcall.toml" }
+shell = """
+mkdir -p vcf.raw logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" MergeMutectStats \
+    -I {input} \
+    -O {output} \
+    2> logs/mergestats_{pair_id}.log
+"""
+
+# LearnReadOrientationModel consumes ALL per-chunk F1R2 tarballs at once and
+# emits one artifact-priors tarball (output name MUST end in .tar.gz, which
+# GATK enforces). Its output is the ONLY expand_inputs product here, so
+# {input} renders all 24 tarballs.
+[[rules]]
+name = "learn_orientation"
+description = "Learn read-orientation artifact priors from F1R2 counts"
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.tar.gz", variables = { chr = "config.chromosomes" } }]
+output = ["vcf.filtered/{pair_id}.orientation-bias.tar.gz"]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/varcall.toml" }
+shell = """
+mkdir -p vcf.filtered logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" LearnReadOrientationModel \
+    -I {input} \
+    -O {output} \
+    2> logs/orientation_{pair_id}.log
+"""
+
+# FilterMutectCalls re-thresholds the merged VCF against the merged stats and
+# applies the learned orientation-bias priors. filteringStats.tsv is written
+# next to the output VCF by default (matches output[2]).
+[[rules]]
+name = "filter_mutect"
+description = "Apply somatic filters (GATK FilterMutectCalls)"
+input = [
+    "vcf.raw/{pair_id}.vcf.gz",
+    "{config.genome_fa}",
+    "vcf.raw/{pair_id}.stats",
+    "vcf.filtered/{pair_id}.orientation-bias.tar.gz",
+]
+output = [
+    "vcf.filtered/{pair_id}.vcf.gz",
+    "vcf.filtered/{pair_id}.vcf.gz.tbi",
+    "vcf.filtered/{pair_id}.filteringStats.tsv",
+]
+threads = 2
+memory = "16G"
+environment = { pixi = "envs/varcall.toml" }
+shell = """
+mkdir -p vcf.filtered logs && \
+gatk --java-options "-Xmx{effective_memory_mb}m" FilterMutectCalls \
+    -R {input[1]} \
+    -V {input[0]} \
+    --stats {input[2]} \
+    --orientation-bias-artifact-priors {input[3]} \
+    -O {output[0]} \
+    2> logs/filter_{pair_id}.log && \
+tabix -f -p vcf {output[0]}
+"""
+
+# Select PASS variants into the clinical delivery VCF.
+[[rules]]
+name = "select_pass"
+description = "Keep FILTER=PASS variants into delivery VCF"
+input = ["vcf.filtered/{pair_id}.vcf.gz", "{config.genome_fa}"]
+output = [
+    "deliver/{pair_id}.somatic.pass.vcf.gz",
+    "deliver/{pair_id}.somatic.pass.vcf.gz.tbi",
+]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/varcall.toml" }
+shell = """
+mkdir -p deliver logs && \
+bcftools view -f PASS -Oz -o {output[0]} {input[0]} 2> logs/selectpass_{pair_id}.log && \
+tabix -f -p vcf {output[0]}
+"""

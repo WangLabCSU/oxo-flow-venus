@@ -1,0 +1,84 @@
+[workflow]
+name = "venus-align"
+description = "DNA alignment: BWA-MEM2 + samtools sort + Picard MarkDuplicates + BQSR"
+
+# BWA-MEM2 alignment with read-group header, coordinate-sorted BAM.
+[[rules]]
+name = "bwa_mem2"
+description = "Align reads to GRCh38 with BWA-MEM2"
+input = [
+    "{config.genome_fa}",
+    "qc/trim/{sample}_R1.trim.fastq.gz",
+    "qc/trim/{sample}_R2.trim.fastq.gz",
+]
+output = ["align/{sample}/{sample}.sorted.bam"]
+log = "logs/bwa_mem2/{sample}.log"
+threads = 16
+memory = "48G"
+environment = { pixi = "envs/align.toml" }
+params.read_group = "@RG\\tID:{sample}\\tSM:{sample}\\tPL:BGI\\tLB:{sample}"
+shell = """
+mkdir -p align/{sample} logs/bwa_mem2 && \
+bwa-mem2 mem -t {threads} -R '{params.read_group}' \
+    {config.bwa_prefix} {input[1]} {input[2]} \
+    2> {log} \
+  | samtools sort -@ {threads} -m 2G -o {output} -
+"""
+
+# Mark PCR duplicates — required for somatic variant calling.
+[[rules]]
+name = "mark_duplicates"
+description = "Mark PCR duplicates with Picard"
+input = ["align/{sample}/{sample}.sorted.bam"]
+output = [
+    "align/{sample}/{sample}.markdup.bam",
+    "align/{sample}/{sample}.dup_metrics.txt",
+]
+log = "logs/mark_duplicates/{sample}.log"
+threads = 4
+memory = "24G"
+environment = { pixi = "envs/align.toml" }
+shell = """
+mkdir -p logs/mark_duplicates && \
+picard MarkDuplicates \
+    -I {input} -O {output[0]} -M {output[1]} \
+    --CREATE_INDEX true \
+    --VALIDATION_STRINGENCY LENIENT \
+    --TMP_DIR .oxo-flow/tmp/{sample} \
+    -Xmx{effective_memory_mb}m \
+    2> {log}
+"""
+
+# BQSR: learn recalibration model, then apply.
+[[rules]]
+name = "bqsr"
+description = "Base quality score recalibration (GATK BQSR)"
+input = [
+    "align/{sample}/{sample}.markdup.bam",
+    "{config.dbsnp}",
+    "{config.mills}",
+    "{config.genome_dict}",
+]
+output = [
+    "bqsr/{sample}/{sample}.recal.table",
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+log = "logs/bqsr/{sample}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/varcall.toml" }
+when = "config.run_bqsr == 'true'"
+shell = """
+mkdir -p bqsr/{sample} logs/bqsr && \
+gatk --java-options "-Xmx{effective_memory_mb}m" BaseRecalibrator \
+    -R {config.genome_fa} -I {input[0]} \
+    --known-sites {input[1]} --known-sites {input[2]} \
+    -O {output[0]} \
+    2>> {log} && \
+gatk --java-options "-Xmx{effective_memory_mb}m" ApplyBQSR \
+    -R {config.genome_fa} -I {input[0]} \
+    --bqsr-recal-file {output[0]} \
+    -O {output[1]} \
+    2>> {log}
+"""
