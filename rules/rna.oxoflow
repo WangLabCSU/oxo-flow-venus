@@ -19,7 +19,7 @@ output = [
 ]
 threads = 16
 memory = "64G"
-environment = { pixi = "envs/rna.toml" }
+environment = { pixi = "envs/rna/pixi.toml" }
 shell = """
 mkdir -p rna/star/{sample} logs/rna_star && \
 STAR \
@@ -49,7 +49,7 @@ output = [
 ]
 threads = 8
 memory = "16G"
-environment = { pixi = "envs/rna.toml" }
+environment = { pixi = "envs/rna/pixi.toml" }
 shell = """
 mkdir -p rna/counts logs && \
 featureCounts \
@@ -71,7 +71,7 @@ expand_inputs = [{ pattern = "rna/counts/{sample}.featurecounts.txt", variables 
 output = ["rna/counts/cohort.gene_counts.txt"]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p rna/counts logs && \
 python {config.venus_tools}/merge_counts.py \
@@ -88,7 +88,7 @@ expand_inputs = [{ pattern = "rna/star/{sample}/{sample}.Log.final.out", variabl
 output = ["rna/qc/rna_qc_summary.tsv"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p rna/qc logs && \
 python {config.venus_tools}/summarize_star_logs.py \

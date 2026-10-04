@@ -28,7 +28,7 @@ Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstrea
 venus.oxoflow        # main workflow: config + include list + chromosome scatter
 rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation, cnv, rna, scrna, report)
 scripts/             # python helpers (MAF conversion, TMB, cohort tables, clinical report, …)
-envs/*.toml          # pixi environments, one per module (resolved into the workflow's pixi env dir)
+envs/<mod>/pixi.toml # pixi environments, one dir per module (env specs in rules point here)
 config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
 config/groups.tsv    # sample groups (bulkRNA, scRNA)
 ```

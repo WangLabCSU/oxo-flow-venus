@@ -12,7 +12,7 @@ expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz", variables = { chr
 output = ["vcf.raw/{pair_id}.vcf.gz"]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.raw logs && \
 gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs \
@@ -32,7 +32,7 @@ expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz.stats", variables =
 output = ["vcf.raw/{pair_id}.stats"]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.raw logs && \
 gatk --java-options "-Xmx{effective_memory_mb}m" MergeMutectStats \
@@ -52,7 +52,7 @@ expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.tar.gz", variables = { chr
 output = ["vcf.filtered/{pair_id}.orientation-bias.tar.gz"]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.filtered logs && \
 gatk --java-options "-Xmx{effective_memory_mb}m" LearnReadOrientationModel \
@@ -80,7 +80,7 @@ output = [
 ]
 threads = 2
 memory = "16G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.filtered logs && \
 gatk --java-options "-Xmx{effective_memory_mb}m" FilterMutectCalls \
@@ -104,7 +104,7 @@ output = [
 ]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p deliver logs && \
 bcftools view -f PASS -Oz -o {output[0]} {input[0]} 2> logs/selectpass_{pair_id}.log && \

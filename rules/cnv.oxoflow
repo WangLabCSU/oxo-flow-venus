@@ -23,7 +23,7 @@ output = [
 ]
 threads = 8
 memory = "32G"
-environment = { pixi = "envs/cnv.toml" }
+environment = { pixi = "envs/cnv/pixi.toml" }
 when = "wildcard.control != ''"
 shell = """
 mkdir -p cnv/{pair_id} logs && \
@@ -54,7 +54,7 @@ output = [
 ]
 threads = 8
 memory = "32G"
-environment = { pixi = "envs/cnv.toml" }
+environment = { pixi = "envs/cnv/pixi.toml" }
 when = "wildcard.control == ''"
 shell = """
 mkdir -p cnv/{pair_id} logs && \

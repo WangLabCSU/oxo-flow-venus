@@ -21,7 +21,7 @@ output = [
 ]
 threads = 4
 memory = "16G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p deliver logs && \
 {config.vep_bin} \
@@ -57,7 +57,7 @@ output = [
 ]
 threads = 2
 memory = "8G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p deliver logs && \
 python {config.venus_tools}/vcf2maf_light.py \

@@ -20,7 +20,7 @@ output = [
 log = "logs/fastp/{sample}.log"
 threads = 8
 memory = "16G"
-environment = { pixi = "envs/qc.toml" }
+environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/trim logs/fastp && \
 fastp \
@@ -51,7 +51,7 @@ output = [
 log = "logs/fastqc/{sample}.log"
 threads = 4
 memory = "4G"
-environment = { pixi = "envs/qc.toml" }
+environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/fastqc logs/fastqc && \
 fastqc --threads {threads} -o qc/fastqc {input} 2> {log}
@@ -75,7 +75,7 @@ expand_inputs = [
 log = "logs/multiqc.log"
 threads = 4
 memory = "8G"
-environment = { pixi = "envs/qc.toml" }
+environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/multiqc logs && \
 multiqc . --filename multiqc_report --outdir qc/multiqc --force 2> {log}

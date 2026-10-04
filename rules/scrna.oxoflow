@@ -30,7 +30,7 @@ output = [
 log = "logs/scrna_fastqc/{sample}.log"
 threads = 4
 memory = "4G"
-environment = { pixi = "envs/qc.toml" }
+environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p scrna/fastqc logs/scrna_fastqc && \
 fastqc --threads {threads} -o scrna/fastqc {input[0]} {input[1]} 2> {log}
@@ -58,7 +58,7 @@ output = [
 log = "logs/scrna_count/{sample}.log"
 threads = 16
 memory = "64G"
-environment = { pixi = "envs/scrna.toml" }
+environment = { pixi = "envs/scrna/pixi.toml" }
 shell = """
 mkdir -p scrna/count logs/scrna_count && \
 {config.scrna_bin} rna run \
@@ -88,7 +88,7 @@ output = [
 ]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p scrna/qc logs && \
 python {config.venus_tools}/scrna_qc_cluster.py \
@@ -107,7 +107,7 @@ expand_inputs = [{ pattern = "scrna/qc/{sample}.clusters.tsv", variables = { sam
 output = ["scrna/cohort_clusters.tsv"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p logs && \
 python {config.venus_tools}/scrna_integrate.py \

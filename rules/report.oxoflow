@@ -11,7 +11,7 @@ input = [".oxo-flow/checkpoint.json"]
 output = ["report/methods_section.md"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/methods_from_rule_runs.py \
@@ -28,7 +28,7 @@ input = ["deliver/{pair_id}.maf"]
 output = ["report/tmb/{pair_id}.tmb.tsv"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report/tmb logs && \
 python {config.venus_tools}/tmb_from_maf.py \
@@ -48,7 +48,7 @@ expand_inputs = [
 output = ["report/scrna_metrics.tsv"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/scrna_metrics.py \
@@ -75,7 +75,7 @@ expand_inputs = [
 output = ["report/cohort_summary.tsv"]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/cohort_tables.py \
@@ -100,7 +100,7 @@ output = [
 ]
 threads = 2
 memory = "4G"
-environment = { pixi = "envs/report.toml" }
+environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/clinical_report.py \

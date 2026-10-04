@@ -15,7 +15,7 @@ output = ["align/{sample}/{sample}.sorted.bam"]
 log = "logs/bwa_mem2/{sample}.log"
 threads = 16
 memory = "48G"
-environment = { pixi = "envs/align.toml" }
+environment = { pixi = "envs/align/pixi.toml" }
 params.read_group = "@RG\\tID:{sample}\\tSM:{sample}\\tPL:BGI\\tLB:{sample}"
 shell = """
 mkdir -p align/{sample} logs/bwa_mem2 && \
@@ -37,7 +37,7 @@ output = [
 log = "logs/mark_duplicates/{sample}.log"
 threads = 4
 memory = "24G"
-environment = { pixi = "envs/align.toml" }
+environment = { pixi = "envs/align/pixi.toml" }
 shell = """
 mkdir -p logs/mark_duplicates && \
 picard MarkDuplicates \
@@ -67,7 +67,7 @@ output = [
 log = "logs/bqsr/{sample}.log"
 threads = 8
 memory = "32G"
-environment = { pixi = "envs/varcall.toml" }
+environment = { pixi = "envs/varcall/pixi.toml" }
 when = "config.run_bqsr == 'true'"
 shell = """
 mkdir -p bqsr/{sample} logs/bqsr && \
