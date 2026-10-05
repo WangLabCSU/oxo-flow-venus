@@ -70,7 +70,7 @@ name = "multiqc"
 description = "Aggregate all QC reports with MultiQC"
 output = [
     "qc/multiqc/multiqc_report.html",
-    "qc/multiqc/multiqc_data/multiqc_general_stats.txt",
+    "qc/multiqc/multiqc_report_data/multiqc_general_stats.txt",
 ]
 expand_inputs = [
     { pattern = "qc/trim/{sample}.fastp.json", variables = { sample = "config.samples_DNA" } },
@@ -86,5 +86,5 @@ memory = "8G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/multiqc logs && \
-multiqc . --filename multiqc_report --outdir qc/multiqc --force 2> {log}
+multiqc . --filename multiqc_report --outdir qc/multiqc --force --ignore "*_STARtmp*" 2> {log}
 """
