@@ -16,7 +16,7 @@ input = [
 output = ["align/{sample}/{sample}.sorted.bam"]
 log = "logs/bwa_mem2/{sample}.log"
 threads = 16
-memory = "48G"
+memory = "64G"
 environment = { pixi = "envs/align/pixi.toml" }
 params.read_group = "@RG\\tID:{sample}\\tSM:{sample}\\tPL:BGI\\tLB:{sample}"
 shell = """
@@ -24,7 +24,7 @@ mkdir -p align/{sample} logs/bwa_mem2 && \
 bwa-mem2 mem -t {threads} -R '{params.read_group}' \
     {config.bwa_prefix} {input[1]} {input[2]} \
     2> {log} \
-  | samtools sort -@ {threads} -m 2G -o {output} -
+  | samtools sort -@ 8 -m 2G -o {output} -
 """
 
 # Mark PCR duplicates — required for somatic variant calling.
