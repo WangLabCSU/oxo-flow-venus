@@ -47,7 +47,7 @@ input = [
 ]
 output = [
     "rna/counts/{sample}.featurecounts.txt",
-    "rna/counts/{sample}.featurecounts.summary",
+    "rna/counts/{sample}.featurecounts.txt.summary",
 ]
 threads = 8
 memory = "16G"
