@@ -50,13 +50,13 @@ input = [
     "raw/{sample}_SC-oligo_R2.fastq.gz",
 ]
 output = [
-    "scrna/count/{sample}/raw_matrix/matrix.mtx.gz",
-    "scrna/count/{sample}/raw_matrix/features.tsv.gz",
-    "scrna/count/{sample}/raw_matrix/barcodes.tsv.gz",
-    "scrna/count/{sample}/filter_feature.h5ad",
-    "scrna/count/{sample}/analysis/cluster.csv",
-    "scrna/count/{sample}/analysis/marker.csv",
-    "scrna/count/{sample}/metrics_summary.xls",
+    "scrna/count/{sample}/outs/raw_matrix/matrix.mtx.gz",
+    "scrna/count/{sample}/outs/raw_matrix/features.tsv.gz",
+    "scrna/count/{sample}/outs/raw_matrix/barcodes.tsv.gz",
+    "scrna/count/{sample}/outs/filter_feature.h5ad",
+    "scrna/count/{sample}/outs/analysis/cluster.csv",
+    "scrna/count/{sample}/outs/analysis/marker.csv",
+    "scrna/count/{sample}/outs/metrics_summary.xls",
 ]
 log = "logs/scrna_count/{sample}.log"
 threads = 16
@@ -85,8 +85,8 @@ name = "scrna_qc_cluster"
 description = "Summarize clusters and marker genes per sample"
 when = "wildcard.assay == 'scrna'"
 input = [
-    "scrna/count/{sample}/analysis/cluster.csv",
-    "scrna/count/{sample}/analysis/marker.csv",
+    "scrna/count/{sample}/outs/analysis/cluster.csv",
+    "scrna/count/{sample}/outs/analysis/marker.csv",
 ]
 output = [
     "scrna/qc/{sample}.clusters.tsv",

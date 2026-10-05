@@ -45,7 +45,7 @@ python {config.venus_tools}/tmb_from_maf.py \
 name = "scrna_metrics_cohort"
 description = "Collect per-sample single-cell metrics into cohort table"
 expand_inputs = [
-    { pattern = "scrna/count/{sample}/metrics_summary.xls", variables = { sample = "config.samples_scRNA" } },
+    { pattern = "scrna/count/{sample}/outs/metrics_summary.xls", variables = { sample = "config.samples_scRNA" } },
 ]
 output = ["report/scrna_metrics.tsv"]
 threads = 2
