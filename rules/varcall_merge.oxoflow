@@ -9,7 +9,7 @@ description = "Per-pair VCF merge (GatherVcfs across chromosomes) + stats merge 
 name = "gather_chr_vcfs"
 description = "Concatenate per-chromosome Mutect2 VCFs (GATK GatherVcfs)"
 expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.vcf.gz", variables = { chrom = "config.chromosomes" } }]
-output = ["vcf.raw/{pair_id}.vcf.gz"]
+output = ["vcf.raw/{pair_id}.vcf.gz", "vcf.raw/{pair_id}.vcf.gz.tbi"]
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -17,8 +17,9 @@ shell = """
 mkdir -p vcf.raw logs && \
 IARGS="" && for f in {input}; do IARGS="$IARGS -I $f"; done && \
 gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs $IARGS \
-    -O {output} \
-    2> logs/gather_{pair_id}.log
+    -O {output[0]} \
+    2> logs/gather_{pair_id}.log && \
+tabix -f -p vcf {output[0]}
 """
 
 # Mutect2 writes one .stats file per chromosome chunk. FilterMutectCalls
