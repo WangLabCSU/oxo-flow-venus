@@ -8,7 +8,7 @@ description = "Per-pair VCF merge (GatherVcfs across chromosomes) + stats merge 
 [[rules]]
 name = "gather_chr_vcfs"
 description = "Concatenate per-chromosome Mutect2 VCFs (GATK GatherVcfs)"
-expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz", variables = { chr = "config.chromosomes" } }]
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.vcf.gz", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.raw/{pair_id}.vcf.gz"]
 threads = 2
 memory = "8G"
@@ -28,7 +28,7 @@ gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs \
 [[rules]]
 name = "merge_mutect_stats"
 description = "Merge per-chromosome Mutect2 stats (GATK MergeMutectStats)"
-expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.vcf.gz.stats", variables = { chr = "config.chromosomes" } }]
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.vcf.gz.stats", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.raw/{pair_id}.stats"]
 threads = 2
 memory = "8G"
@@ -48,7 +48,7 @@ gatk --java-options "-Xmx{effective_memory_mb}m" MergeMutectStats \
 [[rules]]
 name = "learn_orientation"
 description = "Learn read-orientation artifact priors from F1R2 counts"
-expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chr}.tar.gz", variables = { chr = "config.chromosomes" } }]
+expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.tar.gz", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.filtered/{pair_id}.orientation-bias.tar.gz"]
 threads = 2
 memory = "8G"
