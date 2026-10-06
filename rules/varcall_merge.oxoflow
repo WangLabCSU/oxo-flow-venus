@@ -15,8 +15,8 @@ memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.raw logs && \
-gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs \
-    -I {input} \
+IARGS="" && for f in {input}; do IARGS="$IARGS -I $f"; done && \
+gatk --java-options "-Xmx{effective_memory_mb}m" GatherVcfs $IARGS \
     -O {output} \
     2> logs/gather_{pair_id}.log
 """
@@ -35,8 +35,8 @@ memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.raw logs && \
-gatk --java-options "-Xmx{effective_memory_mb}m" MergeMutectStats \
-    -I {input} \
+SARGS="" && for f in {input}; do SARGS="$SARGS -stats $f"; done && \
+gatk --java-options "-Xmx{effective_memory_mb}m" MergeMutectStats $SARGS \
     -O {output} \
     2> logs/mergestats_{pair_id}.log
 """
@@ -55,8 +55,8 @@ memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
 shell = """
 mkdir -p vcf.filtered logs && \
-gatk --java-options "-Xmx{effective_memory_mb}m" LearnReadOrientationModel \
-    -I {input} \
+OARGS="" && for f in {input}; do OARGS="$OARGS -I $f"; done && \
+gatk --java-options "-Xmx{effective_memory_mb}m" LearnReadOrientationModel $OARGS \
     -O {output} \
     2> logs/orientation_{pair_id}.log
 """
