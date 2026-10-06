@@ -26,7 +26,7 @@ def read_maf(path: str) -> list[dict[str, str]]:
         import gzip
         opener = gzip.open
     with opener(path, "rt") as fh:
-        lines = [ln for ln in fh if not ln.startswith("##")]
+        lines = [ln for ln in fh if not ln.startswith("#")]
     if not lines:
         return []
     header = lines[0].lstrip("#").rstrip("\n").split("\t")
