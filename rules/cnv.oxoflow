@@ -35,7 +35,7 @@ cnvkit.py batch {input[0]} \
     --output-reference cnv/{pair_id}/reference.cnn \
     --output-dir cnv/{pair_id} \
     --diagram --scatter \
-    --parallel {threads} \
+    -p {threads} \
     2> logs/cnvkit_{pair_id}.log
 """
 
@@ -65,6 +65,6 @@ cnvkit.py batch {input[0]} \
     --reference {input[2]} \
     --output-dir cnv/{pair_id} \
     --diagram --scatter \
-    --parallel {threads} \
+    -p {threads} \
     2> logs/cnvkit_{pair_id}.log
 """
