@@ -17,6 +17,9 @@ input = [
 ]
 output = [
     "cnv/{pair_id}/reference.cnn",
+    "cnv/{pair_id}/{experiment}.bqsr.cnr",
+    "cnv/{pair_id}/{experiment}.bqsr.call.cns",
+    "cnv/{pair_id}/{experiment}.bqsr-scatter.png",
     "cnv/{pair_id}/{pair_id}.cnr",
     "cnv/{pair_id}/{pair_id}.call.cns",
     "cnv/{pair_id}/{pair_id}.cnv.png",
@@ -37,6 +40,12 @@ cnvkit.py batch {input[0]} \
     --diagram --scatter \
     -p {threads} \
     2> logs/cnvkit_{pair_id}.log
+
+# CNVkit names outputs after the BAM basename; expose stable pair-named
+# aliases for downstream rules and the report.
+ln -sf {experiment}.bqsr.cnr cnv/{pair_id}/{pair_id}.cnr && \
+ln -sf {experiment}.bqsr.call.cns cnv/{pair_id}/{pair_id}.call.cns && \
+ln -sf {experiment}.bqsr-scatter.png cnv/{pair_id}/{pair_id}.cnv.png
 """
 
 [[rules]]
@@ -48,6 +57,9 @@ input = [
     "{config.cnv_reference}",
 ]
 output = [
+    "cnv/{pair_id}/{experiment}.bqsr.cnr",
+    "cnv/{pair_id}/{experiment}.bqsr.call.cns",
+    "cnv/{pair_id}/{experiment}.bqsr-scatter.png",
     "cnv/{pair_id}/{pair_id}.cnr",
     "cnv/{pair_id}/{pair_id}.call.cns",
     "cnv/{pair_id}/{pair_id}.cnv.png",
@@ -67,4 +79,10 @@ cnvkit.py batch {input[0]} \
     --diagram --scatter \
     -p {threads} \
     2> logs/cnvkit_{pair_id}.log
+
+# CNVkit names outputs after the BAM basename; expose stable pair-named
+# aliases for downstream rules and the report.
+ln -sf {experiment}.bqsr.cnr cnv/{pair_id}/{pair_id}.cnr && \
+ln -sf {experiment}.bqsr.call.cns cnv/{pair_id}/{pair_id}.call.cns && \
+ln -sf {experiment}.bqsr-scatter.png cnv/{pair_id}/{pair_id}.cnv.png
 """
