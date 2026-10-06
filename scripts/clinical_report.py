@@ -22,6 +22,41 @@ def read_tsv(path: str | None) -> list[dict[str, str]]:
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
+
+
+def tmb_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
+    """Compact TMB table: patient + key counts + TMB, from the patient-level
+    cohort summary (tmb_ columns) or a raw tmb_from_maf table."""
+    rows = read_tsv(path)
+    if not rows:
+        return f"_{title}: no data._\n"
+    cols = list(rows[0].keys())
+    if "tmb_sample_id" in cols:  # patient-level summary
+        show = [
+            ("sample", "patient"),
+            ("tmb_sample_id", "tumor"),
+            ("tmb_total_pass_variants", "pass variants"),
+            ("tmb_coding_non_silent", "coding non-silent"),
+            ("tmb_snps", "SNPs"),
+            ("tmb_indels", "indels"),
+            ("tmb_target_mb", "target Mb"),
+            ("tmb_tmb_mut_per_mb", "TMB (mut/Mb)"),
+        ]
+        show = [(c, l) for c, l in show if c in cols]
+    else:
+        show = [(c, c) for c in cols]
+    out = []
+    if title:
+        out.append(f"**{title}**\n")
+    out.append("| " + " | ".join(l for _, l in show) + " |")
+    out.append("|" + "---|" * len(show))
+    for row in rows[:max_rows]:
+        out.append("| " + " | ".join(str(row.get(c, "")) for c, _ in show) + " |")
+    if len(rows) > max_rows:
+        out.append(f"\n_… {len(rows) - max_rows} more rows in {path}_")
+    return "\n".join(out) + "\n"
+
+
 def tsv_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
     rows = read_tsv(path)
     if not rows:
@@ -104,7 +139,7 @@ def main() -> int:
     parts.append("")
 
     parts.append("## Tumor mutational burden (per Mb of callable territory)\n")
-    parts.append(tsv_markdown(args.tmb, title="TMB summary"))
+    parts.append(tmb_markdown(args.tmb, title="TMB summary"))
 
     parts.append("## Bulk RNA-seq alignment QC\n")
     parts.append(tsv_markdown(args.rna_qc, title="STAR alignment metrics"))

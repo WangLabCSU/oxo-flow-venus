@@ -60,13 +60,15 @@ python {config.venus_tools}/scrna_metrics.py \
     2> logs/scrna_metrics.log
 """
 
-# Aggregate TMB + RNA QC + single-cell metrics into one cohort table.
-# Input ordering: declared inputs first (rna_qc_summary = {input[0]},
-# scrna_metrics = {input[1]}), then expanded TMB tables appended
-# ({input[2]}..{input[11]}) — cohort_tables.py maps flags accordingly.
+# Aggregate TMB + RNA QC + single-cell metrics into one PATIENT-level
+# cohort table. {input} expands to the full combined input list (declared
+# inputs first, then expand_inputs results): [0] rna_qc_summary,
+# [1] scrna_metrics, [2..11] the ten per-pair TMB tables. cohort_tables.py
+# normalizes sample keys to patient level (strips -TD/-B/-TR) so each
+# patient row carries tmb_* + rna_* + sc_* columns.
 [[rules]]
 name = "cohort_tables"
-description = "Outer-join per-module tables into cohort summary"
+description = "Outer-join per-module tables into patient-level cohort summary"
 input = [
     "rna/qc/rna_qc_summary.tsv",
     "report/scrna_metrics.tsv",
@@ -81,9 +83,7 @@ environment = { pixi = "envs/report/pixi.toml" }
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/cohort_tables.py \
-    --rna-qc {input[0]} \
-    --scrna-metrics {input[1]} \
-    --tmb {input[2]} \
+    --inputs {input} \
     --output {output[0]} \
     2> logs/cohort_tables.log
 """
@@ -95,6 +95,8 @@ description = "Render final cohort report (Markdown + HTML)"
 input = [
     "report/methods_section.md",
     "report/cohort_summary.tsv",
+    "rna/qc/rna_qc_summary.tsv",
+    "report/scrna_metrics.tsv",
 ]
 output = [
     "report/venus_clinical_report.md",
@@ -108,6 +110,8 @@ mkdir -p report logs && \
 python {config.venus_tools}/clinical_report.py \
     --methods {input[0]} \
     --tmb {input[1]} \
+    --rna-qc {input[2]} \
+    --scrna-metrics {input[3]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \

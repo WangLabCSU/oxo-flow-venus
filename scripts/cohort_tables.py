@@ -1,73 +1,92 @@
 #!/usr/bin/env python3
-"""Build cohort-level summary tables from per-sample pipeline outputs.
+"""Build the patient-level cohort summary from per-module venus tables.
 
-Inputs are plain TSVs produced by earlier venus rules (TMB table, STAR QC
-table, single-cell metrics). Rows are keyed by sample; the script outer-joins
-them into one cohort TSV for the clinical report.
+Inputs arrive as ONE ordered list (--inputs): [0] STAR bulk-RNA QC summary,
+[1] single-cell metrics, [2:] per-pair TMB tables (the expanded tmb_per_pair
+outputs — {input} is declared inputs followed by expanded ones).
+
+Rows are normalized to PATIENT level: assay suffixes (-TD tumor / -B blood
+normal / -TR bulk RNA) are stripped so Pt01-TD, Pt01-TR and Pt01 all land on
+one patient row. The original per-module sample id is preserved as
+<module>sample_id for provenance. A module the patient lacks leaves its
+columns empty.
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
-from pathlib import Path
 
 
-def read_tsv(path: str, key: str) -> dict[str, dict[str, str]]:
-    table: dict[str, dict[str, str]] = {}
+def read_tsv(path: str) -> list[dict[str, str]]:
     with open(path) as fh:
-        reader = csv.DictReader(fh, delimiter="\t")
-        for row in reader:
-            k = row.get(key, "")
-            if k:
-                table[k] = row
-    return table
+        return list(csv.DictReader(fh, delimiter="\t"))
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--tmb", help="tmb_from_maf output (key: sample)")
-    ap.add_argument("--rna-qc", help="summarize_star_logs output (key: sample)")
-    ap.add_argument("--scrna-metrics", help="scrna metrics TSV (key: sample)")
+    ap.add_argument(
+        "--inputs",
+        nargs="+",
+        required=True,
+        help="ordered module tables: [0] RNA QC, [1] scRNA metrics, [2:] TMB tables",
+    )
+    ap.add_argument(
+        "--suffixes",
+        default="TD,B,TR",
+        help="comma-separated assay suffixes stripped from sample ids to get "
+        "the patient key (default: TD,B,TR)",
+    )
     ap.add_argument("--output", required=True)
     args = ap.parse_args()
 
-    sources = []
-    if args.tmb:
-        sources.append(("tmb_", read_tsv(args.tmb, "sample")))
-    if args.rna_qc:
-        sources.append(("rna_", read_tsv(args.rna_qc, "sample")))
-    if args.scrna_metrics:
-        sources.append(("sc_", read_tsv(args.scrna_metrics, "sample")))
+    if len(args.inputs) < 2:
+        print(
+            "[cohort_tables] need at least RNA QC + scRNA metrics inputs",
+            file=sys.stderr,
+        )
+        return 1
 
-    keys: list[str] = []
-    seen: set[str] = set()
-    for _, table in sources:
-        for k in table:
-            if k not in seen:
-                seen.add(k)
-                keys.append(k)
+    suffix_re = re.compile(r"-(" + "|".join(args.suffixes.split(",")) + r")$")
 
-    # Build prefixed columns to avoid collisions between modules
+    def patient_of(sample: str) -> str:
+        return suffix_re.sub("", sample)
+
+    # Module tables in declared-input order; the TMB source is the
+    # concatenation of every expanded per-pair table.
+    sources = [
+        ("rna_", read_tsv(args.inputs[0])),
+        ("sc_", read_tsv(args.inputs[1])),
+        ("tmb_", [row for path in args.inputs[2:] for row in read_tsv(path)]),
+    ]
+
+    # patient -> {column: value}; insertion order keeps cohort sample order.
+    patients: dict[str, dict[str, str]] = {}
     columns: list[str] = ["sample"]
-    prefixed: dict[str, dict[str, str]] = {k: {} for k in keys}
-    for prefix, table in sources:
-        sample_cols = list(next(iter(table.values())).keys()) if table else []
-        for col in sample_cols:
-            if col == "sample":
+    seen_cols: set[str] = {"sample"}
+    for prefix, rows in sources:
+        for row in rows:
+            sample = row.get("sample", "")
+            if not sample:
                 continue
-            columns.append(prefix + col)
-        for k in keys:
-            for col in sample_cols:
-                if col != "sample":
-                    prefixed[k][prefix + col] = table.get(k, {}).get(col, "")
+            rec = patients.setdefault(patient_of(sample), {"sample": patient_of(sample)})
+            for col, val in row.items():
+                out_col = prefix + ("sample_id" if col == "sample" else col)
+                if out_col not in seen_cols:
+                    seen_cols.add(out_col)
+                    columns.append(out_col)
+                rec[out_col] = val
 
     with open(args.output, "w", newline="") as out:
         w = csv.DictWriter(out, fieldnames=columns, delimiter="\t", extrasaction="ignore")
         w.writeheader()
-        for k in keys:
-            w.writerow({"sample": k, **prefixed[k]})
-    print(f"[cohort_tables] {len(keys)} samples, {len(columns)} columns -> {args.output}", file=sys.stderr)
+        for rec in patients.values():
+            w.writerow(rec)
+    print(
+        f"[cohort_tables] {len(patients)} patients, {len(columns)} columns -> {args.output}",
+        file=sys.stderr,
+    )
     return 0
 
 
