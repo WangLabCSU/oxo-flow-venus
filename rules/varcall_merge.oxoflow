@@ -77,7 +77,7 @@ input = [
 output = [
     "vcf.filtered/{pair_id}.vcf.gz",
     "vcf.filtered/{pair_id}.vcf.gz.tbi",
-    "vcf.filtered/{pair_id}.filteringStats.tsv",
+    "vcf.filtered/{pair_id}.vcf.gz.filteringStats.tsv",
 ]
 threads = 2
 memory = "16G"
