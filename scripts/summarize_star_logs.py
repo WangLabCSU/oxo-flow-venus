@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 METRICS = [
-    ("Input Reads", "total_reads"),
+    ("Number of input reads", "total_reads"),
     ("Uniquely mapped reads %", "uniquely_mapped_pct"),
     ("Uniquely mapped reads number", "uniquely_mapped"),
     ("% of reads mapped to multiple loci", "multi_mapped_pct"),
@@ -29,7 +29,7 @@ def parse_log(path: str) -> dict[str, str]:
     row: dict[str, str] = {"sample": Path(path).name.replace("Log.final.out", "").rstrip("._-")}
     text = Path(path).read_text()
     for key, column in METRICS:
-        m = re.search(re.escape(key) + r"\t(.+)", text)
+        m = re.search(re.escape(key) + r"\s*\|\s*(.+)", text)
         if m:
             row[column] = m.group(1).strip().replace("%", "")
     return row
