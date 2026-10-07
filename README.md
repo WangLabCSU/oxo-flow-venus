@@ -115,7 +115,7 @@ oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg target_
 - `deliver/{pair_id}.somatic.pass.vep.vcf.gz` — VEP-annotated VCF
 - `deliver/{pair_id}.maf` — MAF (2.4.1 subset) for downstream TMB/mutational-signature tools
 - `report/tmb/{pair_id}.tmb.tsv` — TMB (mut/Mb, non-silent coding)
-- `report/clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
+- `report/venus_clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
 
 ## License
