@@ -18,7 +18,7 @@ log = "logs/bwa_mem2/{sample}.log"
 threads = 16
 memory = "64G"
 environment = { pixi = "envs/align/pixi.toml" }
-params.read_group = "@RG\\tID:{sample}\\tSM:{sample}\\tPL:BGI\\tLB:{sample}"
+params.read_group = "@RG\\tID:{sample}\\tSM:{sample}\\tPL:{config.read_group_platform}\\tLB:{sample}"
 shell = """
 mkdir -p align/{sample} logs/bwa_mem2 && \
 bwa-mem2 mem -t {threads} -R '{params.read_group}' \

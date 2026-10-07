@@ -21,6 +21,14 @@ description = "Tumor multi-omics: WGS/WES somatic SNV/indel + CNV + bulk RNA + s
 pairs_file = "config/pairs.tsv"
 sample_groups_file = "config/groups.tsv"
 
+# Fail loudly: any non-zero statement inside a rule's shell aborts the rule,
+# and pipelines (bwa-mem2 | samtools sort) propagate the upstream exit code.
+# Without this, a mid-stream BWA failure yields a truncated-but-valid BAM and
+# a failed CNVkit run still "succeeds" via its trailing symlink aliases.
+# (Top-level workflow keys like pairs_file must come BEFORE any [section].)
+[defaults]
+shell_prelude = "set -euo pipefail"
+
 # ---------------------------------------------------------------------------
 # Config — override any key at runtime with `oxo-flow run --arg KEY=VALUE`.
 # All paths below are ABSOLUTE on the analysis server; the workflow itself is
@@ -32,6 +40,9 @@ genome_fa = "/home/data/reference/GRCh38.d1.vd1.fa"
 genome_fai = "/home/data/reference/GRCh38.d1.vd1.fa.fai"
 genome_dict = "/home/data/reference/GRCh38.d1.vd1.dict"
 bwa_prefix = "/home/data/reference/GRCh38.d1.vd1.fa"
+# Read-group PL (platform unit) written into BAM headers. "BGI" for
+# DNBSEQ/MGISEQ data; set "ILLUMINA" for Illumina FASTQs.
+read_group_platform = "BGI"
 
 # Bulk-RNA alignment (built from GRCh38.d1.vd1.fa + GENCODE v47 GTF)
 star_index = "/home/data/reference/star_index_GRCh38_d1vd1"
@@ -61,9 +72,16 @@ scrna_min_umi = 1000
 # CCDS via --coding-mb in tmb_from_maf.py) for BOTH WGS and WES. Pass
 # tmb_target_args = "--target-bed /path/regions.bed" for WES/panel so the
 # all-somatic Mb is computed from merged capture intervals instead.
+# target_bed itself is the documented anchor for the interval set; the tools
+# that need it receive it through the *_args fragments below (rules cannot
+# branch on config, so each tool has its own passthrough key).
 target_bed = ""
 target_mb = 3000
 tmb_target_args = ""
+mutect_target_args = ""
+
+# CNVkit binning method: "wgs" (default) or "hybrid" for exome/panel capture.
+cnv_method = "wgs"
 
 # CNV: tumor-only mode falls back to a prebuilt normal reference (.cnn).
 # CNV target argument fragment: "" for WGS; for WES/panel set e.g.

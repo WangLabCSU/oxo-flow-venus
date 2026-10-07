@@ -5,6 +5,10 @@ description = "Somatic SNV/indel calling: per-chromosome Mutect2 scatter (paired
 # Per-chromosome Mutect2. Paired and tumor-only variants share the SAME output
 # paths — the engine instantiates exactly one per (pair_id, chr) based on
 # whether the pair declares a control sample.
+# config.mutect_target_args passes the capture intervals in WES/panel mode
+# (e.g. "-L /path/exome.bed"); keep it empty for WGS. The default
+# --panel-of-normals is the 1000G general PoN (germline-artifact filtering for
+# WGS); for WES/panel cohorts supply a matched PoN via config.pon.
 # Each Mutect2 instance writes three files:
 #   {chr}.vcf.gz        — unfiltered calls
 #   {chr}.vcf.gz.stats  — depth stats (auto side-output, needed by
@@ -40,6 +44,7 @@ gatk --java-options "-Xmx{effective_memory_mb}m" Mutect2 \
     -I {input[0]} -I {input[2]} \
     -normal {control} \
     -L {chr} \
+    {config.mutect_target_args} \
     --germline-resource {input[6]} \
     --panel-of-normals {input[7]} \
     --f1r2-tar-gz vcf.raw/{pair_id}/{chr}.tar.gz \
@@ -72,6 +77,7 @@ gatk --java-options "-Xmx{effective_memory_mb}m" Mutect2 \
     -R {input[2]} \
     -I {input[0]} \
     -L {chr} \
+    {config.mutect_target_args} \
     --germline-resource {input[4]} \
     --f1r2-tar-gz vcf.raw/{pair_id}/{chr}.tar.gz \
     -O {output[0]} \

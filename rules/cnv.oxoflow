@@ -4,9 +4,11 @@ description = "Somatic copy-number calling with CNVkit (paired and tumor-only)"
 
 # CNVkit batch: paired mode builds the reference from the matched normal;
 # tumor-only falls back to a prebuilt normal reference .cnn (config.cnv_reference).
-# WGS mode (default): no --targets; CNVkit bins the whole genome. For WES/panel
-# runs set config.cnv_targets_args = "--targets /path/to/targets.bed" and leave
-# cnv_targets unset in inputs (passed through as an argument fragment).
+# Binning method comes from config.cnv_method ("wgs" default; "hybrid" for
+# WES/panel capture). WGS mode: no --targets; CNVkit bins the whole genome.
+# For WES/panel runs also set config.cnv_targets_args = "--targets /path/to/
+# targets.bed" and leave cnv_targets unset in inputs (passed through as an
+# argument fragment).
 [[rules]]
 name = "cnvkit_paired"
 description = "CNVkit batch with matched normal"
@@ -33,7 +35,7 @@ mkdir -p cnv/{pair_id} logs && \
 cnvkit.py batch {input[0]} \
     --normal {input[1]} \
     --fasta {input[2]} \
-    --method wgs \
+    --method {config.cnv_method} \
     {config.cnv_targets_args} \
     --output-reference cnv/{pair_id}/reference.cnn \
     --output-dir cnv/{pair_id} \
@@ -72,7 +74,7 @@ shell = """
 mkdir -p cnv/{pair_id} logs && \
 cnvkit.py batch {input[0]} \
     --fasta {input[1]} \
-    --method wgs \
+    --method {config.cnv_method} \
     {config.cnv_targets_args} \
     --reference {input[2]} \
     --output-dir cnv/{pair_id} \

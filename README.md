@@ -10,7 +10,7 @@
 | DNA alignment | BWA-MEM2, Picard MarkDuplicates, GATK BQSR | sorted BAM + BAI per sample |
 | Somatic calling | GATK Mutect2 (per-chromosome scatter) + FilterMutectCalls with orientation-bias priors | per-pair VCF (PASS), `stats`, MAF |
 | Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
-| CNV | CNVkit (`wgs` method; `--reference` for tumor-only) | per-pair CNV profiles |
+| CNV | CNVkit (`cnv_method`, default `wgs`; `--reference` for tumor-only) | per-pair CNV profiles |
 | SV | Manta (paired somatic + tumor-only candidates; `--exome` for WES) | `deliver/{pair}.sv.vcf.gz` (PASS, paired) or `deliver/{pair}.sv.candidate.vcf.gz` (unscored, tumor-only) |
 | MSI | MSIsensor-pro (paired only) | `deliver/{pair}.msi.tsv` |
 | Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
@@ -21,7 +21,7 @@
 Analysis modes:
 - **Paired tumor–normal** (`pairs.tsv` with a control sample) — Mutect2 tumor/normal, CNVkit `--normal`.
 - **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes.
-- **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel (Mutect2 `-L`), plus `cnv_targets_args`, `sv_exome_args`, and `tmb_target_args` per the checklist below; leave empty for WGS.
+- **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel, plus `mutect_target_args`, `cnv_method`, `cnv_targets_args`, `sv_exome_args`, and `tmb_target_args` per the checklist below; leave empty for WGS.
 
 ## Groups and assay gating
 
@@ -112,7 +112,9 @@ WGS is the default; a WES/panel run needs these config keys set:
 
 | Key | Purpose |
 |---|---|
-| `target_bed` | capture intervals — passed to Mutect2 `-L` |
+| `target_bed` | capture intervals — the documented anchor for the interval set; tools receive it via the `*_args` fragments below |
+| `mutect_target_args` | e.g. `-L /path/regions.bed` — restricts Mutect2 to the capture targets |
+| `cnv_method` | `hybrid` for WES/panel capture (default `wgs`) |
 | `cnv_targets_args` | e.g. `--targets /path/regions.bed` for CNVkit |
 | `sv_exome_args` | set `--exome` so Manta's off-target depth filters keep real WES events |
 | `tmb_target_args` | e.g. `--target-bed /path/regions.bed` so `all_somatic_mut_per_mb` uses merged capture Mb (the clinical `tmb_mut_per_mb` uses coding Mb for both WGS and WES) |
@@ -163,7 +165,10 @@ oxo-flow run --background
 Every config key can be overridden per run without editing the file:
 
 ```bash
-oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg cnv_targets_args="--targets /data/exome.bed" --arg tmb_target_args="--target-bed /data/exome.bed"
+oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed \
+  --arg mutect_target_args="-L /data/exome.bed" --arg cnv_method=hybrid \
+  --arg cnv_targets_args="--targets /data/exome.bed" --arg sv_exome_args="--exome" \
+  --arg tmb_target_args="--target-bed /data/exome.bed" --arg msi_coverage=20
 ```
 
 ## Outputs of note
