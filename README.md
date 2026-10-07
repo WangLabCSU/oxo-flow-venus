@@ -21,7 +21,7 @@
 Analysis modes:
 - **Paired tumor–normal** (`pairs.tsv` with a control sample) — Mutect2 tumor/normal, CNVkit `--normal`.
 - **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes.
-- **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel (Mutect2 `-L`, CNVkit `--targets` via `cnv_targets_args`, TMB denominator `target_mb`); leave empty for WGS.
+- **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel (Mutect2 `-L`), plus `cnv_targets_args`, `sv_exome_args`, and `tmb_target_args` per the checklist below; leave empty for WGS.
 
 ## Groups and assay gating
 
@@ -112,10 +112,11 @@ WGS is the default; a WES/panel run needs these config keys set:
 
 | Key | Purpose |
 |---|---|
-| `target_bed` | capture intervals — passed to Mutect2 `-L`; enables `target_mb` as the TMB denominator |
+| `target_bed` | capture intervals — passed to Mutect2 `-L` |
 | `cnv_targets_args` | e.g. `--targets /path/regions.bed` for CNVkit |
 | `sv_exome_args` | set `--exome` so Manta's off-target depth filters keep real WES events |
-| `msi_coverage`, `msi_targets_args` | `20` and `-b <bed>` restrict MSI scoring to captured, adequately-covered sites |
+| `tmb_target_args` | e.g. `--target-bed /path/regions.bed` so `all_somatic_mut_per_mb` uses merged capture Mb (the clinical `tmb_mut_per_mb` uses coding Mb for both WGS and WES) |
+| `msi_coverage` | `20` for WES depth floors — capture-restricted MSI is NOT supported (msisensor-pro has no BED flag) |
 
 ### Operating on a run workdir (vendored workflow copy)
 
@@ -162,7 +163,7 @@ oxo-flow run --background
 Every config key can be overridden per run without editing the file:
 
 ```bash
-oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg target_mb=34
+oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg cnv_targets_args="--targets /data/exome.bed" --arg tmb_target_args="--target-bed /data/exome.bed"
 ```
 
 ## Outputs of note
@@ -173,7 +174,7 @@ oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg target_
 - `deliver/{pair_id}.sv.vcf.gz` — Manta somatic SVs filtered to PASS (paired); `deliver/{pair_id}.sv.candidate.vcf.gz` — unscored candidates (tumor-only)
 - `deliver/{pair_id}.msi.tsv` — MSIsensor-pro MSI score (paired runs only; tumor-only MSI needs a panel-of-normals baseline)
 - `report/signatures/{pair_id}.sbs96.counts.tsv` / `.exposures.tsv` — SBS96 channel counts and NNLS-fitted COSMIC v3.1 exposures (with cosine similarity in the run log)
-- `report/tmb/{pair_id}.tmb.tsv` — TMB (mut/Mb, non-silent coding)
+- `report/tmb/{pair_id}.tmb.tsv` — TMB under two conventions: `tmb_mut_per_mb` (coding non-silent per coding Mb — clinical, ≥10 mut/Mb cutoff) and `all_somatic_mut_per_mb` (all PASS per target Mb — WGS literature convention)
 - `report/venus_clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
 

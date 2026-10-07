@@ -33,7 +33,7 @@ threads = 2
 memory = "8G"
 environment = { pixi = "envs/signature/pixi.toml" }
 shell = """
-mkdir -p report/signatures && \
+mkdir -p report/signatures logs && \
 python {config.venus_tools}/sbs96_fit.py \
     --maf {input[0]} \
     --genome-fa {input[1]} \

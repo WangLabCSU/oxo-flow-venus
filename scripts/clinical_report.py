@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import html
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -107,7 +108,7 @@ def interpretation_markdown(path: str | None) -> str:
         if med_all > 0 and tmb_all >= 5 * med_all:
             flags.append(f"all-somatic TMB {tmb_all:.3f} mut/Mb = {tmb_all/med_all:.0f}× cohort median")
         if tmb >= 10:
-            flags.append("exceeds ≥10 mut/Mb high-TMB clinical cutoff (WES convention)")
+            flags.append("exceeds ≥10 mut/Mb high-TMB clinical cutoff (coding convention)")
         tot, ind = f(r, c_total), f(r, c_indels)
         if tot > 0 and ind / tot >= 0.30:
             flags.append(f"indel fraction {ind/tot:.0%} — possible MSI/MMR deficiency")
@@ -146,6 +147,18 @@ def tsv_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
     return "\n".join(out) + "\n"
 
 
+INLINE_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
+# Underscore italics only for spans containing a space, so snake_case paths
+# and identifiers (tmb_mut_per_mb, logs/sbs96_Pt09.log) are left untouched.
+INLINE_EM_RE = re.compile(r"(?<![\w])_([^_]*\s[^_]*)_(?![\w])")
+
+
+def _inline(escaped: str) -> str:
+    """Inline **bold** / _italic_ on already-escaped text."""
+    escaped = INLINE_BOLD_RE.sub(r"<b>\1</b>", escaped)
+    return INLINE_EM_RE.sub(r"<em>\1</em>", escaped)
+
+
 def md_to_html(md: str) -> str:
     """Minimal Markdown -> HTML for headings, tables, code, emphasis."""
     lines = md.splitlines()
@@ -160,25 +173,25 @@ def md_to_html(md: str) -> str:
             if not in_table:
                 out.append("<table>")
                 in_table = True
-                out.append("<tr>" + "".join(f"<th>{c}</th>" for c in cells) + "</tr>")
+                out.append("<tr>" + "".join(f"<th>{_inline(c)}</th>" for c in cells) + "</tr>")
             else:
-                out.append("<tr>" + "".join(f"<td>{c}</td>" for c in cells) + "</tr>")
+                out.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in cells) + "</tr>")
             continue
         if in_table:
             out.append("</table>")
             in_table = False
         if line.startswith("### "):
-            out.append(f"<h3>{esc[4:]}</h3>")
+            out.append(f"<h3>{_inline(esc[4:])}</h3>")
         elif line.startswith("## "):
-            out.append(f"<h2>{esc[3:]}</h2>")
+            out.append(f"<h2>{_inline(esc[3:])}</h2>")
         elif line.startswith("# "):
-            out.append(f"<h1>{esc[2:]}</h1>")
+            out.append(f"<h1>{_inline(esc[2:])}</h1>")
         elif line.startswith("- "):
-            out.append(f"<li>{esc[2:]}</li>")
+            out.append(f"<li>{_inline(esc[2:])}</li>")
         elif line.strip() == "":
             out.append("")
         else:
-            out.append(f"<p>{esc}</p>")
+            out.append(f"<p>{_inline(esc)}</p>")
     if in_table:
         out.append("</table>")
     return "\n".join(out)

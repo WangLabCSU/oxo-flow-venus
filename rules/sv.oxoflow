@@ -11,6 +11,11 @@ description = "Somatic structural-variant calling with Manta (paired and tumor-o
 # filters, which would otherwise suppress most real events at shallow depth).
 # Left empty for WGS (default).
 #
+# Flag semantics (Manta 1.6.0 configManta.py): --normalBam is the matched
+# normal, --tumorBam is the somatic tumor sample, and --bam means *additional
+# germline* samples. Passing the tumor via --bam puts both BAMs in
+# normalBamList (tumorBamList stays None) and Manta silently runs a germline
+# duo workflow — diploidSV/candidateSV are produced but somaticSV never is.
 # Tumor-only: Manta cannot score somatic SVs without a normal, so only the
 # unfiltered candidateSV set is delivered, named .sv.candidate.vcf.gz to make
 # its unscored status explicit. Paired runs deliver somaticSV filtered to PASS.
@@ -35,7 +40,7 @@ shell = """
 mkdir -p manta logs && \
 configManta.py \
     --normalBam {input[1]} \
-    --bam {input[0]} \
+    --tumorBam {input[0]} \
     --referenceFasta {input[2]} \
     --runDir manta/{pair_id} \
     {config.sv_exome_args} \
@@ -59,6 +64,9 @@ output = [
 threads = 8
 memory = "32G"
 environment = { pixi = "envs/sv/pixi.toml" }
+# --bam (not --tumorBam) is correct here: with no matched normal there is no
+# somatic mode, so the single sample is declared as a plain germline sample
+# and only candidateSV is emitted.
 when = "wildcard.control == ''"
 shell = """
 mkdir -p manta logs && \

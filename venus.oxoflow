@@ -55,11 +55,15 @@ scrna_chemistry = "scRNAv2HT"
 scrna_darkreaction = "R1,R1"
 scrna_min_umi = 1000
 
-# WES/panel mode: target intervals + captured Mb (TMB denominator). Empty
-# target_bed => WGS mode; TMB denominator = target_mb (default ~3000 Mb
-# callable WGS).
+# WES/panel mode: target intervals + captured Mb. Empty target_bed => WGS
+# mode. target_mb is the ALL-somatic TMB denominator (default ~3000 Mb
+# callable WGS); the clinical TMB denominator is coding territory (~34 Mb
+# CCDS via --coding-mb in tmb_from_maf.py) for BOTH WGS and WES. Pass
+# tmb_target_args = "--target-bed /path/regions.bed" for WES/panel so the
+# all-somatic Mb is computed from merged capture intervals instead.
 target_bed = ""
 target_mb = 3000
+tmb_target_args = ""
 
 # CNV: tumor-only mode falls back to a prebuilt normal reference (.cnn).
 # CNV target argument fragment: "" for WGS; for WES/panel set e.g.
@@ -72,10 +76,11 @@ cnv_targets_args = ""
 sv_exome_args = ""
 
 # MSI (MSIsensor-pro): per-site coverage threshold (-c; tool default 15 for
-# WGS, 20 recommended for WES) and optional BED restriction fragment ("" for
-# WGS; for WES/panel set e.g. "-b /path/to/targets.bed"). Paired runs only —
-# tumor-only MSI needs a panel-of-normals baseline MSIsensor-pro cannot build
-# from a single cohort.
+# WGS, 20 recommended for WES). Paired runs only — tumor-only MSI needs a
+# panel-of-normals baseline MSIsensor-pro cannot build from a single cohort.
+# msi_targets_args is RESERVED and must stay "": msisensor-pro v1.3.0 has no
+# BED/target-restriction flag (its -b sets the thread count, which the rule
+# binds to {threads}), so capture-restricted MSI is not available.
 msi_coverage = "15"
 msi_targets_args = ""
 

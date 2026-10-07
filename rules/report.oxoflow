@@ -23,9 +23,12 @@ python {config.venus_tools}/methods_from_rule_runs.py \
 """
 
 # Per-pair TMB (mutations/Mb) from the delivery MAF (one-row TSV per pair).
-# Dual convention: tmb_mut_per_mb = coding non-silent / target_mb (WES/panel
-# clinical convention); all_somatic_mut_per_mb = ALL PASS somatic variants /
-# target_mb (WGS literature convention). tmb_from_maf.py emits both.
+# Dual convention: tmb_mut_per_mb = coding non-silent / coding Mb (clinical
+# convention, comparable with the >=10 mut/Mb cutoff for BOTH WGS and WES —
+# --coding-mb defaults to ~34 Mb CCDS, shrunk to the BED total for WES);
+# all_somatic_mut_per_mb = ALL PASS somatic variants / target Mb (WGS
+# literature convention; tmb_target_args passes --target-bed <bed> for WES,
+# which computes the honest denominator from merged intervals).
 [[rules]]
 name = "tmb_per_pair"
 description = "Compute TMB per pair from delivery MAF"
@@ -39,6 +42,7 @@ mkdir -p report/tmb logs && \
 python {config.venus_tools}/tmb_from_maf.py \
     --mafs {input[0]} \
     --target-mb {config.target_mb} \
+    {config.tmb_target_args} \
     --output {output[0]} \
     2> logs/tmb_{pair_id}.log
 """
