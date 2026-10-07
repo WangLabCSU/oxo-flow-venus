@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """Compute TMB and per-sample variant summaries from PASS-filtered MAFs.
 
-TMB (mutations per Mb) = count of non-silent coding somatic variants divided
-by the callable territory: target_mb config for WES/panel, or ~3000 Mb
-default for WGS (overridable). Non-silent classes follow the standard TCGA
-definition (missense/nonsense/frameshift/inframe/splice/start-lost/nonstop).
+Two TMB conventions are reported side by side:
+- tmb_mut_per_mb: coding non-silent somatic variants per Mb (WES/panel
+  clinical convention; non-silent classes per TCGA: missense/nonsense/
+  frameshift/inframe/splice/start-lost/nonstop). Comparable with clinical
+  immune-therapy cutoffs (>=10 mut/Mb in WES contexts).
+- all_somatic_mut_per_mb: ALL PASS somatic variants per Mb (WGS literature
+  convention, e.g. Chalmers et al. 2017: counting all somatic mutations per
+  callable Mb). For WGS cohorts this is the literature-comparable value.
+
+Callable territory = target_mb (config; ~3000 Mb default for WGS). Without a
+per-base callable mask this over-estimates the denominator, so both TMB
+values are conservative (slightly understated).
 """
 from __future__ import annotations
 
@@ -59,6 +67,7 @@ def main() -> int:
         snps = sum(1 for r in mafs if r.get("Variant_Type") == "SNP")
         indels = sum(1 for r in mafs if r.get("Variant_Type") in ("INS", "DEL"))
         tmb = (coding / args.target_mb) if args.target_mb > 0 else 0.0
+        tmb_all = (total / args.target_mb) if args.target_mb > 0 else 0.0
         out_rows.append({
             "sample": sample,
             "total_pass_variants": total,
@@ -67,10 +76,12 @@ def main() -> int:
             "indels": indels,
             "target_mb": args.target_mb,
             "tmb_mut_per_mb": f"{tmb:.3f}",
+            "all_somatic_mut_per_mb": f"{tmb_all:.3f}",
         })
 
     columns = ["sample", "total_pass_variants", "coding_non_silent", "snps",
-               "indels", "target_mb", "tmb_mut_per_mb"]
+               "indels", "target_mb", "tmb_mut_per_mb",
+               "all_somatic_mut_per_mb"]
     with open(args.output, "w", newline="") as out:
         w = csv.DictWriter(out, fieldnames=columns, delimiter="\t")
         w.writeheader()

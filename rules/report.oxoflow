@@ -23,6 +23,9 @@ python {config.venus_tools}/methods_from_rule_runs.py \
 """
 
 # Per-pair TMB (mutations/Mb) from the delivery MAF (one-row TSV per pair).
+# Dual convention: tmb_mut_per_mb = coding non-silent / target_mb (WES/panel
+# clinical convention); all_somatic_mut_per_mb = ALL PASS somatic variants /
+# target_mb (WGS literature convention). tmb_from_maf.py emits both.
 [[rules]]
 name = "tmb_per_pair"
 description = "Compute TMB per pair from delivery MAF"
@@ -89,6 +92,9 @@ python {config.venus_tools}/cohort_tables.py \
 """
 
 # Final clinical report (Markdown + HTML), methods from actual execution.
+# Interpretation is rule-based (computed from the cohort table by
+# clinical_report.py); cohort-specific narrative comes from
+# notes/interpretation.md (a tracked source file, not a rule product).
 [[rules]]
 name = "clinical_report"
 description = "Render final cohort report (Markdown + HTML)"
@@ -97,6 +103,7 @@ input = [
     "report/cohort_summary.tsv",
     "rna/qc/rna_qc_summary.tsv",
     "report/scrna_metrics.tsv",
+    "notes/interpretation.md",
 ]
 output = [
     "report/venus_clinical_report.md",
@@ -112,6 +119,7 @@ python {config.venus_tools}/clinical_report.py \
     --tmb {input[1]} \
     --rna-qc {input[2]} \
     --scrna-metrics {input[3]} \
+    --notes {input[4]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \

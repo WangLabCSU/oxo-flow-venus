@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Render the cohort clinical report (Markdown + HTML) from venus outputs.
 
-Assembles: cohort overview, per-patient variant burden, CNV summaries, bulk
-RNA QC, single-cell QC, and the methods section produced by
+Assembles: cohort overview, per-patient variant burden (dual TMB convention),
+rule-based interpretation flags, bulk RNA QC, single-cell QC, optional
+cohort-specific notes, and the methods section produced by
 methods_from_rule_runs.py (describing what actually executed).
 """
 from __future__ import annotations
@@ -22,6 +23,12 @@ def read_tsv(path: str | None) -> list[dict[str, str]]:
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
+def _median(values: list[float]) -> float:
+    v = sorted(values)
+    n = len(v)
+    if not v:
+        return 0.0
+    return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2.0
 
 
 def tmb_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
@@ -40,7 +47,8 @@ def tmb_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
             ("tmb_snps", "SNPs"),
             ("tmb_indels", "indels"),
             ("tmb_target_mb", "target Mb"),
-            ("tmb_tmb_mut_per_mb", "TMB (mut/Mb)"),
+            ("tmb_tmb_mut_per_mb", "TMB coding (mut/Mb)"),
+            ("tmb_all_somatic_mut_per_mb", "TMB all somatic (mut/Mb)"),
         ]
         show = [(c, l) for c, l in show if c in cols]
     else:
@@ -54,6 +62,70 @@ def tmb_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
         out.append("| " + " | ".join(str(row.get(c, "")) for c, _ in show) + " |")
     if len(rows) > max_rows:
         out.append(f"\n_… {len(rows) - max_rows} more rows in {path}_")
+    return "\n".join(out) + "\n"
+
+
+def interpretation_markdown(path: str | None) -> str:
+    """Rule-based cohort interpretation, computed from the data (no
+    cohort-specific logic): TMB outliers under both conventions, indel
+    burden (MSI hint), clinical cutoffs. Cohort-specific narrative belongs
+    in the --notes fragment."""
+    rows = read_tsv(path)
+    if not rows:
+        return "_Interpretation: no data._\n"
+    cols = list(rows[0].keys())
+    c_coding = "tmb_tmb_mut_per_mb" if "tmb_tmb_mut_per_mb" in cols else "tmb_mut_per_mb"
+    c_all = "tmb_all_somatic_mut_per_mb" if "tmb_all_somatic_mut_per_mb" in cols else "all_somatic_mut_per_mb"
+    c_indels = "tmb_indels" if "tmb_indels" in cols else "indels"
+    c_total = "tmb_total_pass_variants" if "tmb_total_pass_variants" in cols else "total_pass_variants"
+
+    def f(row: dict, col: str) -> float:
+        try:
+            return float(row.get(col, "") or 0)
+        except ValueError:
+            return 0.0
+
+    med_coding = _median([f(r, c_coding) for r in rows])
+    med_all = _median([f(r, c_all) for r in rows])
+
+    out = [
+        "### Interpretation (rule-based, computed from this cohort)\n",
+        "TMB is reported under two conventions: **coding non-silent** per Mb "
+        "(clinical WES/panel convention, comparable with the ≥10 mut/Mb "
+        "high-TMB cutoff) and **all somatic** per Mb (WGS literature "
+        "convention — every PASS somatic variant per callable Mb). Without a "
+        "per-base callable mask the denominator over-estimates territory, so "
+        "both values are conservative.\n",
+    ]
+    flagged = []
+    for r in rows:
+        s = r.get("sample", "?")
+        tmb, tmb_all = f(r, c_coding), f(r, c_all)
+        flags = []
+        if med_coding > 0 and tmb >= 5 * med_coding:
+            flags.append(f"coding TMB {tmb:.3f} mut/Mb = {tmb/med_coding:.0f}× cohort median")
+        if med_all > 0 and tmb_all >= 5 * med_all:
+            flags.append(f"all-somatic TMB {tmb_all:.3f} mut/Mb = {tmb_all/med_all:.0f}× cohort median")
+        if tmb >= 10:
+            flags.append("exceeds ≥10 mut/Mb high-TMB clinical cutoff (WES convention)")
+        tot, ind = f(r, c_total), f(r, c_indels)
+        if tot > 0 and ind / tot >= 0.30:
+            flags.append(f"indel fraction {ind/tot:.0%} — possible MSI/MMR deficiency")
+        if flags:
+            flagged.append((s, flags))
+    if flagged:
+        out.append("**Outlier samples:**\n")
+        for s, flags in flagged:
+            out.append(f"- **{s}**: " + "; ".join(flags))
+        out.append("")
+        out.append(
+            "Outlier status under BOTH conventions with a high indel fraction "
+            "is the statistical signature of a hypermutator (MSI/MMR-deficient) "
+            "phenotype; confirm with an orthogonal MSI assay before clinical use."
+        )
+    else:
+        out.append("No sample exceeds 5× the cohort median TMB or the ≥10 mut/Mb "
+                   "clinical cutoff; indel fractions are within the normal range.")
     return "\n".join(out) + "\n"
 
 
@@ -119,6 +191,7 @@ def main() -> int:
     ap.add_argument("--scrna-metrics")
     ap.add_argument("--methods", help="methods Markdown fragment")
     ap.add_argument("--pairs", help="config/pairs.tsv")
+    ap.add_argument("--notes", help="cohort-specific interpretation notes (Markdown)")
     ap.add_argument("--output-md", required=True)
     ap.add_argument("--output-html")
     args = ap.parse_args()
@@ -140,6 +213,11 @@ def main() -> int:
 
     parts.append("## Tumor mutational burden (per Mb of callable territory)\n")
     parts.append(tmb_markdown(args.tmb, title="TMB summary"))
+    parts.append(interpretation_markdown(args.tmb))
+
+    if args.notes and Path(args.notes).exists():
+        parts.append("### Cohort-specific findings\n")
+        parts.append(Path(args.notes).read_text())
 
     parts.append("## Bulk RNA-seq alignment QC\n")
     parts.append(tsv_markdown(args.rna_qc, title="STAR alignment metrics"))

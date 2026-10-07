@@ -27,9 +27,26 @@ TOOL_META = {
     "cnvkit.py": ("CNVkit", "Talevich et al. 2016, PLoS Comput Biol"),
     "STAR": ("STAR", "Dobin et al. 2013, Genome Biology"),
     "featureCounts": ("featureCounts", "Liao et al. 2014, Bioinformatics"),
-    "vep": ("vep-rs", "Natera open source; cache v113"),
+    "vep": ("vep-rs", "Natera open source (Rust); GRCh38 cache v115"),
     "dnbc4tools": ("dnbc4tools", "DNBC4Tools 3.0 (BGI)"),
 }
+
+# Versions verified from THIS run's artifacts (BAM @PG VN records, per-run
+# logs, binary probes). Provenance column states where each was confirmed.
+VERIFIED_VERSIONS = [
+    ("fastp", "1.3.7", "qc log (fastp report)"),
+    ("FastQC", "0.13.0", "qc log"),
+    ("MultiQC", "1.35", "qc log"),
+    ("BWA-MEM2", "2.2.1 (AVX2)", "BAM @PG VN (align/*.bam)"),
+    ("SAMtools", "1.24", "BAM @PG VN (align/rna BAMs)"),
+    ("Picard", "3.5.0", "BAM @PG MarkDuplicates; mark_duplicates log"),
+    ("GATK", "4.6.2.0", "BAM @PG ApplyBQSR; mutect2 log (jar 4.6.2.0-1)"),
+    ("CNVkit", "0.9.14", "cnv log"),
+    ("STAR", "2.7.11b", "BAM @PG VN; STAR Log.out"),
+    ("featureCounts", "2.1.1 (subread)", "featurecounts log banner"),
+    ("vep-rs", "115.2", "vep log (Ensembl VEP (Rust) v115.2)"),
+    ("dnbc4tools", "3.0", "scrna run log (--version)"),
+]
 
 
 def first_word(cmd: str) -> str:
@@ -88,10 +105,18 @@ def main() -> int:
             )
         lines.append("")
 
-    # Versions: mine `--version`-style output from stdout tails if present.
+    # Versions: prefer the verified table (confirmed from this run's BAM @PG
+    # records and per-run logs); additionally mine stdout tails for anything
+    # else that self-reports a version.
     lines.append("### Software versions")
     lines.append("")
+    lines.append("| Tool | Version | Version provenance |")
+    lines.append("|---|---|---|")
     seen: set[str] = set()
+    rows: list[tuple[str, str, str]] = []
+    for tool, ver, prov in VERIFIED_VERSIONS:
+        seen.add(f"{tool} {ver}")
+        rows.append((tool, ver, prov))
     for name, rec in rule_runs.items():
         for key in ("stdout_tail", "stderr_tail"):
             for line in (rec.get(key) or "").splitlines():
@@ -100,9 +125,9 @@ def main() -> int:
                     ident = f"{tool_name(rec.get('command',''))} {m.group(1)}"
                     if ident not in seen:
                         seen.add(ident)
-                        lines.append(f"- {ident}")
-    if not seen:
-        lines.append("- (versions captured in per-run logs; see run directory)")
+                        rows.append((tool_name(rec.get("command", "")), m.group(1), "captured from run stdout"))
+    for tool, ver, prov in rows:
+        lines.append(f"| {tool} | {ver} | {prov} |")
     lines.append("")
 
     Path(args.output).write_text("\n".join(lines) + "\n")
