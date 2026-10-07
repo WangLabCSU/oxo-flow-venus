@@ -73,12 +73,65 @@ or `-s 2` (reverse) in `rules/rna.oxoflow`.
 
 ```
 venus.oxoflow        # main workflow: config + include list + chromosome scatter
-rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation, cnv, rna, scrna, report)
-scripts/             # python helpers (MAF conversion, TMB, cohort tables, clinical report, …)
+rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation,
+                     #   cnv, sv, msi, signature, rna, scrna, report)
+scripts/             # python helpers (MAF conversion, TMB, SBS96 fit, cohort tables,
+                     #   clinical report, …)
 envs/<mod>/pixi.toml # pixi environments, one dir per module (env specs in rules point here)
+resources/           # vendored data tables (COSMIC v3.1 SBS96 GRCh38 signature matrix)
 config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
 config/groups.tsv    # sample groups + assay metadata (DNA, bulkRNA, scRNA)
 ```
+
+## Extending venus with a new module
+
+A module is one rule fragment plus one environment; nothing else changes:
+
+1. **`envs/<mod>/pixi.toml`** — the tool's conda-forge/bioconda deps. Keep it
+   minimal; one env per module avoids the version conflicts that a shared
+   env accumulates (e.g. Manta needs python 2.7 while delivery filtering
+   needs modern bcftools — hence the separate `envs/sv` and `envs/varcall`).
+2. **`rules/<mod>.oxoflow`** — a `[workflow]` header + `[[rules]]`. Conventions
+   the rest of the pipeline relies on:
+   - inputs reference upstream deliverables by path (`bqsr/{experiment}/…`,
+     `deliver/{pair_id}.maf`) — the engine resolves producers automatically;
+   - per-pair deliverables land in `deliver/{pair_id}.<mod>.<ext>`, per-sample
+     analyses in `report/<mod>/{pair_id}.<ext>`; run logs go to `logs/`;
+   - gate paired-only rules with `when = "wildcard.control != ''"` so a
+     tumor-only pair simply skips the instance instead of failing;
+   - tunables live as `[config]` keys in `venus.oxoflow` (overridable at run
+     time with `--arg KEY=VALUE`), not as literals inside rules.
+3. **Wire it up**: `[[include]] path = "rules/<mod>.oxoflow"` in `venus.oxoflow`
+   plus any new `[config]` keys. One-off data tables (signature matrices,
+   panels) go in `resources/` and are declared as rule inputs so checksums
+   cover them.
+
+### WES/panel compatibility checklist
+
+WGS is the default; a WES/panel run needs these config keys set:
+
+| Key | Purpose |
+|---|---|
+| `target_bed` | capture intervals — passed to Mutect2 `-L`; enables `target_mb` as the TMB denominator |
+| `cnv_targets_args` | e.g. `--targets /path/regions.bed` for CNVkit |
+| `sv_exome_args` | set `--exome` so Manta's off-target depth filters keep real WES events |
+| `msi_coverage`, `msi_targets_args` | `20` and `-b <bed>` restrict MSI scoring to captured, adequately-covered sites |
+
+### Operating on a run workdir (vendored workflow copy)
+
+A run workdir (`processed-wsx/`) contains its own copy of `venus.oxoflow`,
+`rules/`, `scripts/`, `envs/`, `resources/`. oxo-flow binds environment
+manifests and checkpoint fingerprints to **workdir-resolved paths**, so:
+
+- run and dry-run from the workdir against its own copy (`oxo-flow dry-run
+  venus.oxoflow`), never against the checkout elsewhere — otherwise every
+  env manifest resolves to the checkout and everything looks stale;
+- after editing the repo, sync changed files into the workdir first
+  (`rsync -a rules/ scripts/ envs/ venus.oxoflow <workdir>/`);
+- a config edit only invalidates rules that *reference* the changed keys:
+  compare the `Summary: N rules` instance count before/after (the line counts
+  total graph instances, not stale ones) and check that the delta equals the
+  new rules' fan-out.
 
 ## Requirements
 
