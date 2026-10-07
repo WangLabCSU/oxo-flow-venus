@@ -6,7 +6,7 @@ All numbers below were recomputed directly from the delivered artifacts
 each figure is reproducible; the STR annotator used is `scripts/str_context.py`.
 
 **Pt09 is a high-confidence MSI/MMR-deficiency hypermutator.** Tumor
-mutational burden (0.679 coding mut/Mb = 14× the cohort median of 0.049;
+mutational burden (0.679 coding mut/Mb over the 3,000-Mb callable target — `report/tmb/Pt09.tmb.tsv` `coding_non_silent`/`target_mb`, i.e. 59.9 per coding-Mb — = 14× the cohort median of 0.049;
 99.75 all-somatic mut/Mb; 299,254 PASS somatic variants) is extreme, and
 every line of evidence below is internally consistent — this is biology, not
 a technical artifact:
@@ -71,6 +71,6 @@ inhibitor response.
 **Pt05 is a possible low-level MSI case** and is flagged for follow-up:
 26,395 PASS indels = 50.5% of its 52,219 variants (cohort norm for the other
 nine patients is 6.4–10.5%), 24,605 of them in homopolymers, at an
-intermediate TMB (0.094 coding mut/Mb). Its CpG-transition share is only
+intermediate TMB (0.094 coding mut/Mb over the 3,000-Mb target). Its CpG-transition share is only
 mildly elevated over Pt01, so the flag rests on the indel fraction and
 homopolymer load rather than on the substitution pattern.
