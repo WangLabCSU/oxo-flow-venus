@@ -12,7 +12,7 @@
 | Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
 | CNV | CNVkit (`wgs` method; `--reference` for tumor-only) | per-pair CNV profiles |
 | Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics |
-| Single-cell | dnbc4tools (chemistry auto), scanpy | count matrix, QC/clustering metrics |
+| Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`), scanpy | count matrix, QC/clustering metrics |
 | Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
 
 Analysis modes:
@@ -46,7 +46,7 @@ Note: a sample id declared both in `groups.tsv` and in `pairs.tsv`
 (tumor/control) is allowed — the engine warns about duplicate owners but the
 rule paths here are group/pair-disjoint, so outputs never collide.
 
-Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstream of fastp; single-cell libraries are handled by dnbc4tools `--chemistry auto` (BGI DNBSEQ and 10x-style both supported).
+Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstream of fastp. Single-cell libraries are counted by dnbc4tools 3.0; the chemistry is pinned per run via the `scrna_chemistry` config key (default `scRNAv2HT`; accepted values `auto`, `scRNAv1HT`, `scRNAv2HT`, `scRNAv3HT`, `scRNAv5P` — MGI stomics/DNBSEQ kits). 10x Genomics libraries are not covered by the current scRNA module and would need an additional counting tool.
 
 ## Library strandedness
 
