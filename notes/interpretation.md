@@ -34,9 +34,15 @@ a technical artifact:
   aged-colon/SBS1-like pattern characteristic of MMR-deficient colorectal
   cancer. (At VAF ≥ 0.3 the Pt01/Pt05 counts are small — 46 and 84
   transitions — so their all-PASS figures are the stabler comparison.)
-- **MSI-marker regions**: the BAT-26 mononucleotide marker region
-  (chr2:47.63–47.66 Mb) carries a PASS single-base deletion at chr2:47,641,314
-  (TA>T, VAF 0.50) in Pt09; Pt01 has none in the same window.
+- **MSI-marker regions**: the chr2:47.63–47.66 Mb window — which contains a
+  33-bp poly-A tract at chr2:47,634,828, a BAT-26-class mononucleotide
+  microsatellite — carries, in Pt09, a PASS single-base deletion at
+  chr2:47,641,314 (TA>T, VAF 0.50; loss of one A from an 8-bp poly-A tract at
+  47,641,315–322, verified against the reference FASTA). The deletion sits
+  ~6.5 kb from the tract and neither locus was among msisensor-pro's scanned
+  sites, so this is a region-level observation, not a BAT-26 stability call;
+  Pt09's MSI-H classification rests on the genome-wide panel (65,535/621,533
+  sites unstable, 10.54%). Pt01 has no PASS indel in the same window.
 - **MMR genes** (deliver/Pt09.maf): a single nonsilent coding hit —
   **MSH6 p.Ala1055Thr** (chr2:47,801,146 G>A, ENST00000234420.11:c.3163G>A,
   VAF 0.372, tumor depth 43×, normal depth 17×) — plus intronic deletions in

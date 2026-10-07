@@ -8,7 +8,9 @@
 # .oxo-flow/checkpoint.json).
 #
 # Contig naming: reference FASTA uses UCSC-style "chr" prefixes (chr1..chrX,
-# chrM). Mutect2 scatter uses config.chromosomes — keep in sync with the FASTA.
+# chrM). Mutect2 scatter uses config.chromosomes — keep in sync with the FASTA
+# for the contigs being called; chrM is deliberately excluded from the scatter
+# list (somatic mitochondrial calling is out of scope for this pipeline).
 #
 # Platform note: BGI (DNB/MGISEQ) and Illumina FASTQs are interchangeable
 # downstream of fastp; single-cell chemistry auto-detection (dnbc4tools
