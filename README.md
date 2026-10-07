@@ -11,6 +11,9 @@
 | Somatic calling | GATK Mutect2 (per-chromosome scatter) + FilterMutectCalls with orientation-bias priors | per-pair VCF (PASS), `stats`, MAF |
 | Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
 | CNV | CNVkit (`wgs` method; `--reference` for tumor-only) | per-pair CNV profiles |
+| SV | Manta (paired somatic + tumor-only candidates; `--exome` for WES) | `deliver/{pair}.sv.vcf.gz` (PASS, paired) or `deliver/{pair}.sv.candidate.vcf.gz` (unscored, tumor-only) |
+| MSI | MSIsensor-pro (paired only) | `deliver/{pair}.msi.tsv` |
+| Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
 | Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics |
 | Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`), scanpy | count matrix, QC/clustering metrics |
 | Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
@@ -114,6 +117,9 @@ oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed --arg target_
 - `deliver/{pair_id}.somatic.pass.vcf.gz` — PASS somatic variants (unannotated)
 - `deliver/{pair_id}.somatic.pass.vep.vcf.gz` — VEP-annotated VCF
 - `deliver/{pair_id}.maf` — MAF (2.4.1 subset) for downstream TMB/mutational-signature tools
+- `deliver/{pair_id}.sv.vcf.gz` — Manta somatic SVs filtered to PASS (paired); `deliver/{pair_id}.sv.candidate.vcf.gz` — unscored candidates (tumor-only)
+- `deliver/{pair_id}.msi.tsv` — MSIsensor-pro MSI score (paired runs only; tumor-only MSI needs a panel-of-normals baseline)
+- `report/signatures/{pair_id}.sbs96.counts.tsv` / `.exposures.tsv` — SBS96 channel counts and NNLS-fitted COSMIC v3.1 exposures (with cosine similarity in the run log)
 - `report/tmb/{pair_id}.tmb.tsv` — TMB (mut/Mb, non-silent coding)
 - `report/venus_clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`

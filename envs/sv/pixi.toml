@@ -1,0 +1,15 @@
+# Venus SV environment — Manta somatic structural-variant calling.
+#
+# Manta 1.6.0 (bioconda) resolves Python 2.7 as a run dependency and its
+# configManta.py / runWorkflow.py entry points carry `#!/usr/bin/env python2`
+# shebangs, so the env pins python 2.7 explicitly. A modern bcftools cannot
+# co-install with it (openssl 1.0 vs 3.x conflict), so the PASS filtering of
+# Manta output runs in the varcall environment instead (rules/sv.oxoflow).
+[workspace]
+name = "venus-sv"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+manta = ">=1.6"
+python = "2.7.*"

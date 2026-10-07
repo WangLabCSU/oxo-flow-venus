@@ -1,0 +1,13 @@
+# Venus signature environment — SBS96 mutation counting and NNLS fitting of
+# COSMIC v3.1 signatures (scripts/sbs96_fit.py). Kept separate from the report
+# environment so adding scipy never perturbs the report rules' identity.
+[workspace]
+name = "venus-signature"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11.*"
+numpy = ">=1.26"
+scipy = ">=1.11"
+pandas = ">=2.2"

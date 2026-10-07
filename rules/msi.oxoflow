@@ -1,0 +1,50 @@
+[workflow]
+name = "venus-msi"
+description = "Microsatellite instability with MSIsensor-pro (paired tumor-normal)"
+
+# MSIsensor-pro supports two modes: `msi` (paired tumor-normal) and `pro`
+# (single-sample, but ONLY against a prebuilt baseline from a panel of
+# normals — not something a single-cohort run can produce). Venus therefore
+# gates MSI on the presence of a matched normal (when = control != '') and
+# documents tumor-only MSI as not supported. The genome `scan` is a one-time,
+# cohort-shared step (~1-3 h on hg38) run once per workdir.
+#
+# The scan uses MSIsensor-pro's default microsatellite criteria; it reads the
+# reference FASTA directly (no .fai needed). For WES/panel runs restrict the
+# msi scoring to the capture region by setting config.msi_targets_args to a
+# BED, e.g. "-b /path/to/targets.bed" (passed through verbatim).
+[[rules]]
+name = "msisensor_scan"
+description = "Scan reference genome for microsatellites (cohort-shared, once)"
+input = ["{config.genome_fa}"]
+output = ["msi/reference.list"]
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/msi/pixi.toml" }
+shell = """
+mkdir -p msi logs && \
+msisensor-pro scan -d {input[0]} -o msi/reference.list \
+    > logs/msisensor_scan.log 2>&1
+"""
+
+[[rules]]
+name = "msi_paired"
+description = "MSIsensor-pro MSI scoring with matched normal"
+input = [
+    "msi/reference.list",
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{control}/{control}.bqsr.bam",
+]
+output = ["deliver/{pair_id}.msi.tsv"]
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/msi/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p deliver logs && \
+msisensor-pro msi -d {input[0]} -t {input[1]} -n {input[2]} \
+    -o msi/{pair_id} -c {config.msi_coverage} -b {threads} \
+    {config.msi_targets_args} \
+    > logs/msisensor_{pair_id}.log 2>&1 && \
+mv msi/{pair_id} deliver/{pair_id}.msi.tsv
+"""

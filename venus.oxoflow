@@ -1,9 +1,11 @@
 # Venus — tumor multi-omics pipeline for oxo-flow
 #
-# WGS/WES somatic calling (paired + tumor-only), CNV (CNVkit), bulk RNA-seq
-# (STAR + featureCounts), single-cell RNA-seq (dnbc4tools + scanpy), and a
-# cohort clinical report whose methods section is generated from the commands
-# that actually executed (rule_runs in .oxo-flow/checkpoint.json).
+# WGS/WES somatic calling (paired + tumor-only), structural variants (Manta),
+# microsatellite instability (MSIsensor-pro, paired), COSMIC SBS96 signature
+# fitting, CNV (CNVkit), bulk RNA-seq (STAR + featureCounts), single-cell
+# RNA-seq (dnbc4tools + scanpy), and a cohort clinical report whose methods
+# section is generated from the commands that actually executed (rule_runs in
+# .oxo-flow/checkpoint.json).
 #
 # Contig naming: reference FASTA uses UCSC-style "chr" prefixes (chr1..chrX,
 # chrM). Mutect2 scatter uses config.chromosomes — keep in sync with the FASTA.
@@ -65,6 +67,18 @@ target_mb = 3000
 cnv_reference = "/home/data/reference/cnvkit_reference/hg38.wgs.reference.cnn"
 cnv_targets_args = ""
 
+# SV (Manta): "" for WGS; for WES/panel set "--exome" so Manta's depth-based
+# filters (off-target high-depth suppression) do not discard real events.
+sv_exome_args = ""
+
+# MSI (MSIsensor-pro): per-site coverage threshold (-c; tool default 15 for
+# WGS, 20 recommended for WES) and optional BED restriction fragment ("" for
+# WGS; for WES/panel set e.g. "-b /path/to/targets.bed"). Paired runs only —
+# tumor-only MSI needs a panel-of-normals baseline MSIsensor-pro cannot build
+# from a single cohort.
+msi_coverage = "15"
+msi_targets_args = ""
+
 # Pipeline helpers
 venus_tools = "scripts"
 workflow_file = "venus.oxoflow"
@@ -110,6 +124,15 @@ path = "rules/annotation.oxoflow"
 
 [[include]]
 path = "rules/cnv.oxoflow"
+
+[[include]]
+path = "rules/sv.oxoflow"
+
+[[include]]
+path = "rules/msi.oxoflow"
+
+[[include]]
+path = "rules/signature.oxoflow"
 
 [[include]]
 path = "rules/rna.oxoflow"

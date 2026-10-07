@@ -1,0 +1,45 @@
+[workflow]
+name = "venus-signature"
+description = "COSMIC SBS96 mutational-signature exposure fitting per sample"
+
+# Fits each sample's SNV spectrum to the COSMIC v3.1 (GRCh38) SBS96 reference
+# signatures by non-negative least squares (scripts/sbs96_fit.py):
+#   1. count SBS96 channels from the delivered MAF (SNPs only), assigning each
+#      variant its pyrimidine-normalized trinucleotide context read from the
+#      reference genome via .fai random access;
+#   2. NNLS-fit the 96-channel count vector against the signature matrix
+#      (resources/cosmic_v3.1_sbs96_grch38.txt);
+#   3. report exposures sorted descending plus cosine similarity of the
+#      reconstruction.
+#
+# No when-gate: signatures work for any sample with SNVs, paired or
+# tumor-only. Tumor-only samples lack a matched normal, so acquired signatures
+# (SBS2/13 APOBEC, SBS17, therapy-related) dominate over the usually germline-
+# filtered baseline; treat exposures qualitatively in that setting.
+[[rules]]
+name = "sbs96_fit"
+description = "Count SBS96 channels from MAF and fit COSMIC v3.1 exposures"
+input = [
+    "deliver/{pair_id}.maf",
+    "{config.genome_fa}",
+    "{config.genome_fai}",
+    "resources/cosmic_v3.1_sbs96_grch38.txt",
+]
+output = [
+    "report/signatures/{pair_id}.sbs96.counts.tsv",
+    "report/signatures/{pair_id}.exposures.tsv",
+]
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/signature/pixi.toml" }
+shell = """
+mkdir -p report/signatures && \
+python {config.venus_tools}/sbs96_fit.py \
+    --maf {input[0]} \
+    --genome-fa {input[1]} \
+    --signatures {input[3]} \
+    --sample {pair_id} \
+    --counts-out {output[0]} \
+    --exposures-out {output[1]} \
+    > logs/sbs96_{pair_id}.log 2>&1
+"""

@@ -1,0 +1,110 @@
+[workflow]
+name = "venus-sv"
+description = "Somatic structural-variant calling with Manta (paired and tumor-only)"
+
+# Manta needs BAM indexes next to the BAMs (present as .bqsr.bai) and a FASTA
+# .fai. The two-step split (call -> deliver) exists because the Manta env
+# (python 2.7 for configManta.py/runWorkflow.py) cannot co-install a modern
+# bcftools, so PASS filtering runs in the varcall environment.
+#
+# WES/panel runs: set config.sv_exome_args = "--exome" (turns off Manta's depth
+# filters, which would otherwise suppress most real events at shallow depth).
+# Left empty for WGS (default).
+#
+# Tumor-only: Manta cannot score somatic SVs without a normal, so only the
+# unfiltered candidateSV set is delivered, named .sv.candidate.vcf.gz to make
+# its unscored status explicit. Paired runs deliver somaticSV filtered to PASS.
+[[rules]]
+name = "manta_paired"
+description = "Manta somatic SV calling with matched normal"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{control}/{control}.bqsr.bam",
+    "{config.genome_fa}",
+    "{config.genome_fai}",
+]
+output = [
+    "manta/{pair_id}/results/variants/somaticSV.vcf.gz",
+    "manta/{pair_id}/results/variants/somaticSV.vcf.gz.tbi",
+]
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/sv/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p manta logs && \
+configManta.py \
+    --normalBam {input[1]} \
+    --bam {input[0]} \
+    --referenceFasta {input[2]} \
+    --runDir manta/{pair_id} \
+    {config.sv_exome_args} \
+    > logs/manta_config_{pair_id}.log 2>&1 && \
+manta/{pair_id}/runWorkflow.py -m local -j {threads} \
+    > logs/manta_{pair_id}.log 2>&1
+"""
+
+[[rules]]
+name = "manta_tumoronly"
+description = "Manta candidate SV calling without matched normal (unscored)"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "{config.genome_fa}",
+    "{config.genome_fai}",
+]
+output = [
+    "manta/{pair_id}/results/variants/candidateSV.vcf.gz",
+    "manta/{pair_id}/results/variants/candidateSV.vcf.gz.tbi",
+]
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/sv/pixi.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p manta logs && \
+configManta.py \
+    --bam {input[0]} \
+    --referenceFasta {input[1]} \
+    --runDir manta/{pair_id} \
+    {config.sv_exome_args} \
+    > logs/manta_config_{pair_id}.log 2>&1 && \
+manta/{pair_id}/runWorkflow.py -m local -j {threads} \
+    > logs/manta_{pair_id}.log 2>&1
+"""
+
+[[rules]]
+name = "sv_deliver_paired"
+description = "Filter paired Manta somaticSV to PASS and deliver"
+input = ["manta/{pair_id}/results/variants/somaticSV.vcf.gz"]
+output = [
+    "deliver/{pair_id}.sv.vcf.gz",
+    "deliver/{pair_id}.sv.vcf.gz.tbi",
+]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/varcall/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p deliver logs && \
+bcftools view -f PASS -Oz -o {output[0]} {input[0]} \
+    2> logs/sv_filter_{pair_id}.log && \
+bcftools index -t -f {output[0]} 2>> logs/sv_filter_{pair_id}.log
+"""
+
+[[rules]]
+name = "sv_deliver_tumoronly"
+description = "Deliver tumor-only Manta candidateSV (unscored, no PASS filter)"
+input = ["manta/{pair_id}/results/variants/candidateSV.vcf.gz"]
+output = [
+    "deliver/{pair_id}.sv.candidate.vcf.gz",
+    "deliver/{pair_id}.sv.candidate.vcf.gz.tbi",
+]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/varcall/pixi.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p deliver logs && \
+cp {input[0]} {output[0]} && \
+cp {input[0]}.tbi {output[1]}
+"""

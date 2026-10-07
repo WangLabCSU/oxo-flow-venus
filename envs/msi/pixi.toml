@@ -1,0 +1,9 @@
+# Venus MSI environment — MSIsensor-pro microsatellite instability detection
+# (paired tumor-normal `msi` mode; the one-time genome `scan` runs here too).
+[workspace]
+name = "venus-msi"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+msisensor-pro = ">=1.2"
