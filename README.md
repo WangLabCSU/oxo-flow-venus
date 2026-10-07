@@ -131,10 +131,10 @@ manifests and checkpoint fingerprints to **workdir-resolved paths**, so:
   env manifest resolves to the checkout and everything looks stale;
 - after editing the repo, sync changed files into the workdir first
   (`rsync -a rules/ scripts/ envs/ venus.oxoflow <workdir>/`);
-- a config edit only invalidates rules that *reference* the changed keys:
-  compare the `Summary: N rules` instance count before/after (the line counts
-  total graph instances, not stale ones) and check that the delta equals the
-  new rules' fan-out.
+- a config edit only invalidates rules that *reference* the changed keys;
+  `oxo-flow dry-run venus.oxoflow` reports the exact stale/skip/completed
+  split before anything runs (the `Summary: N rules` line, by contrast,
+  counts total graph instances, not stale ones).
 
 ## Requirements
 
