@@ -147,6 +147,7 @@ def tsv_markdown(path: str | None, max_rows: int = 20, title: str = "") -> str:
     return "\n".join(out) + "\n"
 
 
+INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 INLINE_BOLD_RE = re.compile(r"\*\*([^*]+)\*\*")
 # Underscore italics only for spans containing a space, so snake_case paths
 # and identifiers (tmb_mut_per_mb, logs/sbs96_Pt09.log) are left untouched.
@@ -154,7 +155,8 @@ INLINE_EM_RE = re.compile(r"(?<![\w])_([^_]*\s[^_]*)_(?![\w])")
 
 
 def _inline(escaped: str) -> str:
-    """Inline **bold** / _italic_ on already-escaped text."""
+    """Inline `code` / **bold** / _italic_ on already-escaped text."""
+    escaped = INLINE_CODE_RE.sub(r"<code>\1</code>", escaped)
     escaped = INLINE_BOLD_RE.sub(r"<b>\1</b>", escaped)
     return INLINE_EM_RE.sub(r"<em>\1</em>", escaped)
 

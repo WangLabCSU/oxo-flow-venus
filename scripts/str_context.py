@@ -18,6 +18,10 @@ Reference access is pure Python via the FASTA .fai index (no samtools needed;
 random seeks against the uncompressed FASTA are fast enough for MAF-scale
 variant counts).
 
+Standalone utility: not referenced by any rule in the workflow — used for
+manual annotation of delivered MAFs (see notes/interpretation.md), so it is
+not shipped into run workdirs.
+
 Usage:
   python3 str_context.py --fasta hg38.primary.fa \
       --maf deliver/Pt09.maf [--maf deliver/Pt05.maf ...] \

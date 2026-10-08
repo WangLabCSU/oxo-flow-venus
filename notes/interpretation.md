@@ -24,8 +24,9 @@ a technical artifact:
   variants), and zero PASS variants show normal-sample VAF ≥ 0.15 — burden is
   somatic and clonal, not germline contamination or mapping artifact.
 - **Genome-wide distribution**: no focal hypermutation — per-chromosome
-  density ranges 83.1–129.7 mut/Mb across autosomes + chrX (mean 94.3,
-  cv 0.23; min chr15, max chr19 gene-rich); chrY is near-silent (~1 mut/Mb).
+  density ranges 83.1–129.7 mut/Mb across autosomes + chrX (mean 98.4,
+  cv 0.10; min chr15, max chr19 gene-rich); including near-silent chrY
+  (~1 mut/Mb) the 24-chromosome mean is 94.3 (cv 0.23).
   This breadth-without-foci pattern is as expected for a mutator phenotype.
 - **Mutational signature**: among PASS SNPs, C>T/G>A transitions (both
   strands counted, pyrimidine-normalized) sit at CpG dinucleotides 78.0% of
@@ -35,7 +36,7 @@ a technical artifact:
   cancer. (At VAF ≥ 0.3 the Pt01/Pt05 counts are small — 46 and 84
   transitions — so their all-PASS figures are the stabler comparison.)
 - **MSI-marker regions**: the chr2:47.63–47.66 Mb window — which contains a
-  33-bp poly-A tract at chr2:47,634,828, a BAT-26-class mononucleotide
+  32-bp poly-A tract at chr2:47,634,827–858, a BAT-26-class mononucleotide
   microsatellite — carries, in Pt09, a PASS single-base deletion at
   chr2:47,641,314 (TA>T, VAF 0.50; loss of one A from an 8-bp poly-A tract at
   47,641,315–322, verified against the reference FASTA). The deletion sits
@@ -47,7 +48,7 @@ a technical artifact:
   **MSH6 p.Ala1055Thr** (chr2:47,801,146 G>A, ENST00000234420.11:c.3163G>A,
   VAF 0.372, tumor depth 43×, normal depth 17×) — plus intronic deletions in
   MSH2 (25), EPCAM (9), MSH6 (6), PMS2 (3) and MLH1 (3) (criterion: PASS DEL
-  with Variant_Classification = Intron), a burden pattern typical of
+  with Variant_Classification Intron or 5′/3′ flank), a burden pattern typical of
   MMR-deficient tumors. Several additional 5′/3′-flank SNPs on EPCAM/MSH2
   are present at clonal VAFs.
 - **Copy-number stability**: the Pt09 CNVkit segmentation
@@ -58,7 +59,7 @@ a technical artifact:
   (4,655 segments, 112/506, 56 at cn0) — Pt09 carries the few high-amplitude
   events of the three, the chromosomally stable hypermutator subtype.
 - **Depth parity**: length-weighted mean depth over CNVkit target+antitarget
-  bins (2,925.77 Gb of bin space, i.e. genome-wide): Pt09 tumor 41.1× /
+  bins (2,925.77 Mb ≈ 2.9 Gb of bin space, i.e. genome-wide): Pt09 tumor 41.1× /
   normal 19.0× (cohort sampled: Pt01 37.0×/18.5×, Pt05 38.3×/19.1×) —
   balanced tumor/normal depth. Mutect2 filtering statistics are healthy
   (FDR 0.054, sensitivity 0.95, per-filter FDR ≤ 0.02), ruling out caller
@@ -69,8 +70,9 @@ PMS2) to confirm; MSI/MMR-deficient CRC is predictive of immune-checkpoint
 inhibitor response.
 
 **Pt05 is a possible low-level MSI case** and is flagged for follow-up:
-26,395 PASS indels = 50.5% of its 52,219 variants (cohort norm for the other
-nine patients is 6.4–10.5%), 24,605 of them in homopolymers, at an
+26,395 PASS indels = 50.5% of its 52,219 variants (the other eight
+non-flagged patients sit at 6.4–10.5%; Pt09 itself is far higher at 59.4%),
+24,605 of them in homopolymers, at an
 intermediate TMB (0.094 coding mut/Mb over the 3,000-Mb target). Its CpG-transition share is only
 mildly elevated over Pt01, so the flag rests on the indel fraction and
 homopolymer load rather than on the substitution pattern.
