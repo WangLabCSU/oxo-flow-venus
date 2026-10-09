@@ -78,6 +78,7 @@ shell = """
 mkdir -p rna/counts logs && \
 python {config.venus_tools}/merge_counts.py \
     --inputs {input} \
+    --gtf {config.gencode_gtf} \
     --output {output} \
     2> logs/merge_counts.log
 """

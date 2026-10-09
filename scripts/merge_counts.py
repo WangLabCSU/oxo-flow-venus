@@ -5,11 +5,16 @@ featureCounts writes a two-header TSV: line 1 is '# Geneid Chr Start End ...'
 with sample path as the last column; the first data row repeats column names
 (as of subread 2.x the second line is 'Geneid ...'). This script extracts
 Geneid + the per-sample Counts column and outer-joins on gene id.
+
+A GTF (--gtf, optional but wired in the workflow) supplies the HGNC symbol
+for each ENSEMBL gene id, emitted as the second column ``gene_name`` so the
+matrix is directly readable without a separate id-mapping step.
 """
 from __future__ import annotations
 
 import argparse
 import gzip
+import re
 import sys
 from pathlib import Path
 
@@ -24,8 +29,38 @@ def sample_name(path: str) -> str:
     return stem
 
 
-def read_counts(path: str) -> tuple[dict[str, int], bool]:
-    """Return (gene -> count, long-format-flag)."""
+def strip_version(gene_id: str) -> str:
+    """ENSG00000223972.5 -> ENSG00000223972 (PAR_Y suffix preserved)."""
+    return re.sub(r"\.\d+", "", gene_id)
+
+
+def read_gene_names(gtf: str) -> dict[str, str]:
+    """gene_id (versionless) -> gene_name, from GTF 'gene' feature rows."""
+    names: dict[str, str] = {}
+    opener = gzip.open if gtf.endswith(".gz") else open
+    with opener(gtf, "rt") as fh:
+        for line in fh:
+            if line.startswith("#"):
+                continue
+            f = line.split("\t")
+            if len(f) < 9 or f[2] != "gene":
+                continue
+            gid = gn = None
+            for attr in f[8].split(";"):
+                attr = attr.strip()
+                if attr.startswith("gene_id "):
+                    gid = attr[8:].strip().strip('"')
+                elif attr.startswith("gene_name "):
+                    gn = attr[10:].strip().strip('"')
+                if gid and gn:
+                    break
+            if gid:
+                names[strip_version(gid)] = gn or ""
+    return names
+
+
+def read_counts(path: str) -> dict[str, int]:
+    """Return gene -> count."""
     counts: dict[str, int] = {}
     opener = gzip.open if path.endswith(".gz") else open
     with opener(path, "rt") as fh:
@@ -34,10 +69,6 @@ def read_counts(path: str) -> tuple[dict[str, int], bool]:
     if lines and lines[0].startswith("#"):
         start = 1
     header = lines[start].split("\t")
-    # subread 2.x writes 'Geneid  Chr  Start ...' as the FIRST data row
-    if header[0] == "Geneid" and start == 0:
-        # no '#' prefix: first line IS the header
-        pass
     col = header.index("Counts") if "Counts" in header else len(header) - 1
     gene_col = header.index("Geneid") if "Geneid" in header else 0
     for line in lines[start + 1:]:
@@ -50,29 +81,35 @@ def read_counts(path: str) -> tuple[dict[str, int], bool]:
             counts[f[gene_col]] = int(f[col])
         except (ValueError, IndexError):
             continue
-    return counts, True
+    return counts
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--inputs", nargs="+", required=True)
     ap.add_argument("--output", required=True)
+    ap.add_argument("--gtf", default=None,
+                    help="GENCODE GTF for gene_name mapping (optional)")
     args = ap.parse_args()
 
+    gene_names = read_gene_names(args.gtf) if args.gtf else {}
     merged: dict[str, dict[str, int]] = {}
     order: list[str] = []
     for path in args.inputs:
         name = sample_name(path)
         order.append(name)
-        counts, _ = read_counts(path)
-        for gene, c in counts.items():
+        for gene, c in read_counts(path).items():
             merged.setdefault(gene, {})[name] = c
     samples = order
     with open(args.output, "w") as out:
-        out.write("gene_id\t" + "\t".join(samples) + "\n")
+        out.write("gene_id\tgene_name\t" + "\t".join(samples) + "\n")
         for gene in sorted(merged):
-            out.write(gene + "\t" + "\t".join(str(merged[gene].get(s, 0)) for s in samples) + "\n")
-    print(f"[merge_counts] {len(args.inputs)} samples, {len(merged)} genes -> {args.output}", file=sys.stderr)
+            symbol = gene_names.get(strip_version(gene), "")
+            out.write(gene + "\t" + symbol + "\t" +
+                      "\t".join(str(merged[gene].get(s, 0)) for s in samples) + "\n")
+    mapped = sum(1 for g in merged if gene_names.get(strip_version(g)))
+    print(f"[merge_counts] {len(args.inputs)} samples, {len(merged)} genes "
+          f"({mapped} with gene_name) -> {args.output}", file=sys.stderr)
     return 0
 
 

@@ -1,0 +1,11 @@
+# ASCAT allelic CNV (purity/ploidy) for paired tumour/normal WGS.
+# alleleCounter >= 4 enables ASCAT's --dense-snps fast path automatically.
+[workspace]
+name = "venus-ascat"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+ascat = ">=3.2.0"
+cancerit-allelecount = ">=4.3.0"
+bioconductor-genomeinfodbdata = ">=1.2"

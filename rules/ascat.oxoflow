@@ -1,0 +1,78 @@
+[workflow]
+name = "venus-ascat"
+description = "ASCAT allelic copy-number, purity and ploidy for paired WGS"
+
+# ASCAT v3.2 HTS chain (VanLoo-lab official docs), orchestrated as in
+# gcap::gcap.runASCAT (Wang et al. 2024, Nat Commun 15:3231):
+#   prepareHTS -> loadData -> correctLogR -> plotRawData ->
+#   aspcf(gg=NULL) -> plotSegmentedData -> runAscat(gamma=1) -> metrics.
+# WGS mode: no BED, penalty=70, GC + replication-timing correction
+# (G1000 reference from ASCAT Zenodo record 14008443), gamma=1.
+# Autosomes 1:22 only: patient sex is unannotated, so sex chromosomes are
+# excluded from the fit (gender fixed to "XX"; see method rationale).
+#
+# GC/RT correction files are declared as rule inputs; the per-chromosome
+# loci/alleles file sets are addressed through config.ascat_refdir (tracked
+# via config meta, one directory rather than 44 files).
+[[rules]]
+name = "ascat_paired"
+description = "ASCAT purity/ploidy and allelic segmentation with matched normal"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+    "bqsr/{control}/{control}.bqsr.bam",
+    "{config.venus_tools}/run_ascat.R",
+    "{config.ascat_refdir}/GC_G1000_WGS_hg38.txt",
+    "{config.ascat_refdir}/RT_G1000_WGS_hg38.txt",
+]
+output = [
+    "ascat/{pair_id}/{pair_id}.ASCAT.rds",
+    "ascat/{pair_id}/purity_ploidy.tsv",
+    "ascat/{pair_id}/segments.tsv",
+    "ascat/{pair_id}/metrics.tsv",
+    "ascat/{pair_id}/{experiment}_tumourLogR.txt",
+    "ascat/{pair_id}/{experiment}_tumourBAF.txt",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.tumour.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.germline.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASPCF.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASCATprofile.pdf",
+]
+threads = 22
+memory = "64G"
+environment = { pixi = "envs/ascat/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p ascat/{pair_id} logs && \
+Rscript {input[2]} \
+    --tumor {input[0]} \
+    --normal {input[1]} \
+    --tumor-name {experiment} \
+    --normal-name {control} \
+    --job {pair_id} \
+    --outdir ascat/{pair_id} \
+    --refdir {config.ascat_refdir} \
+    --gc {input[3]} \
+    --rt {input[4]} \
+    --threads {threads} \
+    2> logs/ascat_{pair_id}.log
+"""
+
+# Concatenate the per-pair purity/ploidy tables into one cohort table for
+# the report module (clinical_report / cohort_summary consume it). Uses the
+# report environment because it only needs Python.
+[[rules]]
+name = "ascat_cohort"
+description = "Concatenate per-pair ASCAT purity/ploidy into cohort table"
+expand_inputs = [
+    { pattern = "ascat/{pair_id}/purity_ploidy.tsv", variables = { pair_id = "config.pairs_list" } },
+]
+output = ["ascat/cohort_ascat.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p ascat logs && \
+python {config.venus_tools}/collect_ascat.py \
+    --inputs {input} \
+    --output {output[0]} \
+    2> logs/ascat_cohort.log
+"""

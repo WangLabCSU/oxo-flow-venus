@@ -90,6 +90,9 @@ cnv_method = "wgs"
 # --targets /path/to/regions.bed (passed through verbatim to cnvkit batch).
 cnv_reference = "/home/data/reference/cnvkit_reference/hg38.wgs.reference.cnn"
 cnv_targets_args = ""
+# ASCAT (allelic CNV) reference: G1000 loci/alleles + GC/RT correction
+# (VanLoo-lab Zenodo record 14008443, WGS hg38 set).
+ascat_refdir = "/home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs"
 
 # SV (Manta): "" for WGS; for WES/panel set "--exome" so Manta's depth-based
 # filters (off-target high-depth suppression) do not discard real events.
@@ -149,6 +152,9 @@ path = "rules/annotation.oxoflow"
 
 [[include]]
 path = "rules/cnv.oxoflow"
+
+[[include]]
+path = "rules/ascat.oxoflow"
 
 [[include]]
 path = "rules/sv.oxoflow"

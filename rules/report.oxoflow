@@ -18,6 +18,8 @@ shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/methods_from_rule_runs.py \
     --checkpoint .oxo-flow/checkpoint.json \
+    --rules-dir rules \
+    --workflow venus.oxoflow \
     --output {output[0]} \
     2> logs/methods_from_rule_runs.log
 """
@@ -67,18 +69,47 @@ python {config.venus_tools}/scrna_metrics.py \
     2> logs/scrna_metrics.log
 """
 
-# Aggregate TMB + RNA QC + single-cell metrics into one PATIENT-level
-# cohort table. {input} expands to the full combined input list (declared
-# inputs first, then expand_inputs results): [0] rna_qc_summary,
-# [1] scrna_metrics, [2..11] the ten per-pair TMB tables. cohort_tables.py
-# normalizes sample keys to patient level (strips -TD/-B/-TR) so each
-# patient row carries tmb_* + rna_* + sc_* columns.
+# Cohort MSI table. MSIsensor v1.3.0 has a uint16 rank bug in calculateFDR:
+# above 65,535 sites the reported unstable-site count saturates (Pt09 hits
+# exactly 65,535). collect_msi.py recomputes a proper Benjamini-Hochberg FDR
+# from the raw per-site output (msi/<pair>_all, P_value = column 8) and
+# reports reported vs BH-corrected counts side by side. Lives in the report
+# module (not rules/msi.oxoflow) because it is a post-hoc re-analysis of
+# delivered outputs, not an MSI caller step.
+[[rules]]
+name = "msi_cohort"
+description = "Collect MSI summaries with BH-corrected unstable counts"
+expand_inputs = [
+    { pattern = "deliver/{pair_id}.msi.tsv", variables = { pair_id = "config.pairs_list" } },
+    { pattern = "msi/{pair_id}_all", variables = { pair_id = "config.pairs_list" } },
+]
+output = ["report/msi_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/collect_msi.py \
+    --inputs {input} \
+    --output {output[0]} \
+    2> logs/msi_cohort.log
+"""
+
+# Aggregate TMB + RNA QC + single-cell metrics + ASCAT + MSI into one
+# PATIENT-level cohort table. {input} expands to the full combined input
+# list (declared inputs first, then expand_inputs results); cohort_tables.py
+# routes every file by BASENAME (rna_qc_summary / scrna_metrics /
+# cohort_ascat / msi_cohort / else TMB), so ordering does not matter.
+# Sample keys are normalized to patient level (strips -TD/-B/-TR) so each
+# patient row carries tmb_* + rna_* + sc_* + ascat_* + msi_* columns.
 [[rules]]
 name = "cohort_tables"
 description = "Outer-join per-module tables into patient-level cohort summary"
 input = [
     "rna/qc/rna_qc_summary.tsv",
     "report/scrna_metrics.tsv",
+    "ascat/cohort_ascat.tsv",
+    "report/msi_cohort.tsv",
 ]
 expand_inputs = [
     { pattern = "report/tmb/{pair_id}.tmb.tsv", variables = { pair_id = "config.pairs_list" } },
@@ -108,6 +139,8 @@ input = [
     "rna/qc/rna_qc_summary.tsv",
     "report/scrna_metrics.tsv",
     "notes/interpretation.md",
+    "ascat/cohort_ascat.tsv",
+    "report/msi_cohort.tsv",
 ]
 output = [
     "report/venus_clinical_report.md",
@@ -124,6 +157,8 @@ python {config.venus_tools}/clinical_report.py \
     --rna-qc {input[2]} \
     --scrna-metrics {input[3]} \
     --notes {input[4]} \
+    --ascat {input[5]} \
+    --msi {input[6]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \
