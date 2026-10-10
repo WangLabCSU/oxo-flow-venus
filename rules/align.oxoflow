@@ -42,6 +42,10 @@ output = [
     "align/{sample}/{sample}.markdup.bam",
     "align/{sample}/{sample}.dup_metrics.txt",
 ]
+# Duplicate rate is a library QC measurement (goes into methods/QC review and
+# feeds the protected MultiQC report). The markdup BAM itself stays deletable;
+# the metrics file survives every clean.
+protected_output = ["align/{sample}/{sample}.dup_metrics.txt"]
 log = "logs/mark_duplicates/{sample}.log"
 threads = 4
 memory = "24G"

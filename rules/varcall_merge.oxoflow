@@ -89,10 +89,13 @@ output = [
 # PASS subset, so the filtered-out records (germline/strand-bias/PoN) exist
 # only here — primary evidence for sensitivity audits. Regenerating requires
 # the whole vcf.raw scatter chain, whose inputs (bqsr BAMs) a full clean
-# deletes (i.e. realignment). The tiny filteringStats.tsv stays deletable.
+# deletes (i.e. realignment). The filteringStats.tsv is the audit record of
+# the filtering step (per-filter rejection counts) — a measurement result,
+# protected like the VCF it explains.
 protected_output = [
     "vcf.filtered/{pair_id}.vcf.gz",
     "vcf.filtered/{pair_id}.vcf.gz.tbi",
+    "vcf.filtered/{pair_id}.vcf.gz.filteringStats.tsv",
 ]
 threads = 2
 memory = "16G"

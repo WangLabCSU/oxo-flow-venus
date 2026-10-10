@@ -1,6 +1,6 @@
 # Cleaning intermediates in the venus workdir
 
-The venus cohort workdir (`processed-wsx`) holds ~2.7 TB across 1553 outputs
+The venus cohort workdir (`processed-wsx`) holds ~2.7 TB across 1543 declared
 for 10 CRC pairs. Two cleanup modes are supported:
 
 | Mode | Flag | Mechanism | Status |
@@ -71,7 +71,8 @@ patterns, expands wildcards, and deletes only what is not protected.
   FilterMutectCalls (germline/strand-bias/PoN) exist only here — primary
   evidence for sensitivity audits. Regenerating them requires the whole
   `vcf.raw` chain, whose inputs (bqsr BAMs) a clean deletes, i.e. realignment.
-  The tiny `.filteringStats.tsv` per pair is *not* protected.
+  The per-pair `.filteringStats.tsv` (audit record of the filtering step) is
+  protected with them.
 - **Manta scored calls** (`manta/{pair_id}/results/variants/somaticSV.vcf.gz`
   + `.tbi` paired, `candidateSV.vcf.gz` + `.tbi` tumor-only): the full scored
   somatic set behind the PASS-only delivery VCF, and the unfiltered candidate
@@ -98,15 +99,18 @@ patterns, expands wildcards, and deletes only what is not protected.
 - **QC**: multiqc report + general-stats table, plus the per-sample inputs it
   aggregates (`qc/trim/{sample}.fastp.json`/`.fastp.html`,
   `qc/fastqc/{sample}_R{1,2}.trim_fastqc.html`) so the protected report stays
-  re-renderable after a clean. Picard `dup_metrics.txt` is *not* protected.
+  re-renderable after a clean. Picard `dup_metrics.txt` (duplicate-rate
+  measurement) and the scRNA FastQC HTMLs are protected for the same reason —
+  MultiQC ingests them by content match, so an unprotected input would
+  silently vanish from any re-rendered report.
 
 ### What is deleted and what that costs
 
 Everything declared and unprotected: trim FASTQs (~1 TB), alignment BAMs and
 their declared indexes (`align/{sample}/{sample}.sorted.bam`,
-`.markdup.bam` + metrics, `bqsr/{experiment}/*.bqsr.bam` + `.bai` +
-`.recal.table`), the `vcf.raw/` scatter chain, the per-pair
-`.filteringStats.tsv`, CNVkit scratch beyond the protected set, scRNA
+`.markdup.bam`, `bqsr/{sample}/*.bqsr.bam` + `.bai` +
+`.recal.table`), the `vcf.raw/` scatter chain, CNVkit scratch beyond the
+protected set, scRNA
 `raw_matrix/`. On the current
 cohort this is the bulk of the ~2 TB of scratch; note the undeclared leftovers
 below stay behind, so `du` will not drop by the full estimate.
@@ -125,11 +129,14 @@ Both declared MSI products are protected: `deliver/{pair_id}.msi.tsv` (per-pair
 clinical score) and `msi/reference.list` (the cohort-shared msisensor scan,
 1–3 h on hg38). The per-pair locus detail `msi/{pair_id}_all` is an undeclared
 side product of `msi_paired` and therefore survives a clean by accident — the
-engine never touches undeclared files, but do not rely on it (see leftovers
-below).
-`clean_intermediates.sh --apply` still backs up `deliver/ report/ ascat/ msi/`
-into a timestamped `backups/cleanup-<stamp>.tar.gz` before deleting (skip with
-`--no-backup`); the tarball additionally captures `msi/{pair_id}_all`.
+engine never touches undeclared files, but do not rely on it. It is
+evidence-grade: the protected `report/msi_cohort.tsv` BH-corrects over the
+per-locus counts it holds.
+`clean_intermediates.sh --apply` backs up `deliver/ report/ ascat/ msi/` into
+a timestamped `backups/cleanup-<stamp>.tar.gz` before deleting (skip with
+`--no-backup`); the tarball additionally captures the evidence-grade
+undeclared leftovers (`msi/{pair_id}_all`, Manta germline/candidate VCFs, scRNA
+per-cell results and report HTMLs, STAR junction tables).
 
 ### Undeclared leftovers not covered by `clean`
 
@@ -145,12 +152,20 @@ after a clean and must be removed manually if space is critical:
   is the germline call set, worth archiving before deleting).
 - `cnv/{pair_id}/GRCh38*.bed` — the target/antitarget BEDs copied in as
   cnvkit inputs.
+- `ascat/{pair_id}/{experiment}_normal{LogR,BAF}.txt` — germline allele
+  evidence written by `run_ascat.R` (undeclared side product of the ASCAT
+  step).
+- `rna/star/{sample}/_STAR/SJ.out.tab` — STAR splice-junction inventory.
 - `msi/{pair_id}_all` — per-pair msisensor locus detail (undeclared side
-  product; treat as unverified scratch unless you need per-locus audit).
+  product). Evidence-grade: `report/msi_cohort.tsv` BH-corrects over its
+  per-locus counts, so archive rather than delete.
 - `logs/**` — per-rule log files; `clean` never touches logs.
 - `scrna/count/{sample}/outs/` side products outside the declared list:
-  `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, and the per-sample
-  `{sample}_scRNA_report.html`.
+  `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, the per-sample
+  `{sample}_scRNA_report.html`, and the terminal per-cell results
+  `outs/analysis/QC_Cluster.h5ad` + `outs/singlecell.csv` (not consumed by
+  `scrna_qc_cluster`, but they are per-cell measurement outputs — archive,
+  do not treat as scratch).
 
 ## Verifying before you clean
 

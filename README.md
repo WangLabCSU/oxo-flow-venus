@@ -77,7 +77,8 @@ rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annota
                      #   cnv, sv, msi, signature, rna, scrna, report)
 scripts/             # python helpers (MAF conversion, TMB, SBS96 fit, cohort tables,
                      #   clinical report, …) + clean_intermediates.sh (disk cleanup)
-docs/                # method rationale, reference data, cleanup guide
+docs/                # method rationale, reference data, cleanup guide +
+                     #   artifacts.md (full output inventory & cleanup classes)
 envs/<mod>/pixi.toml # pixi environments, one dir per module (env specs in rules point here)
 resources/           # vendored data tables (COSMIC v3.1 SBS96 GRCh38 signature matrix)
 config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
@@ -153,9 +154,16 @@ scripts/clean_intermediates.sh --mode all --apply # backup deliver/report/ascat/
 ```
 
 Note the trade-off: `clean` deletes files but not checkpoint bookkeeping, so a
-later `oxo-flow run` lazily regenerates only what downstream rules need. MSI
-products are currently unprotected (`rules/msi.oxoflow` is frozen); the script
-backs them up before deleting (1–3 h/pair to recompute).
+later `oxo-flow run` lazily regenerates only what downstream rules need. All
+detection results and deliverables (MSI scores included — `rules/msi.oxoflow`
+protects `deliver/{pair_id}.msi.tsv` and `msi/reference.list`) are
+`protected_output`; the script additionally tars the undeclared evidence-grade
+side products (per-locus MSI detail, Manta germline VCFs, scRNA per-cell
+results) before deleting anything.
+
+Every artifact the pipeline produces, its cleanup class, and how each cleanup
+strategy treats it is catalogued in
+[docs/artifacts.md](docs/artifacts.md).
 
 ## Requirements
 

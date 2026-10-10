@@ -29,6 +29,12 @@ output = [
     "scrna/fastqc/{sample}_SC_R1_fastqc.html",
     "scrna/fastqc/{sample}_SC_R2_fastqc.html",
 ]
+# QC measurement reports (same treatment as the DNA/bulkRNA fastqc HTMLs) and
+# ingestion inputs of the protected MultiQC report — survive every clean.
+protected_output = [
+    "scrna/fastqc/{sample}_SC_R1_fastqc.html",
+    "scrna/fastqc/{sample}_SC_R2_fastqc.html",
+]
 log = "logs/scrna_fastqc/{sample}.log"
 threads = 4
 memory = "4G"

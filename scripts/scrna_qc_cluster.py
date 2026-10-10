@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Per-sample single-cell QC + clustering summary from dnbc4tools outputs.
 
-Reads outs/analysis/QC_Cluster.h5ad (or falls back to cluster.csv) and emits
-a compact TSV: cells per cluster, cluster fraction, and top marker genes per
-cluster from marker.csv. Deliberately dependency-light (no scanpy import) —
-the .h5ad path uses the cluster.csv that dnbc4tools already wrote.
+Reads outs/analysis/cluster.csv and outs/analysis/marker.csv and emits a
+compact TSV: cells per cluster, cluster fraction, and top marker genes per
+cluster. Deliberately dependency-light (no scanpy import). The other files
+dnbc4tools leaves in outs/analysis/ (QC_Cluster.h5ad) are terminal per-cell
+results this script does not consume — archive them, do not treat them as
+scratch.
 """
 from __future__ import annotations
 

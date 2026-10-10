@@ -24,6 +24,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MSI products protected: `deliver/{pair_id}.msi.tsv` (per-pair clinical
   score) and `msi/reference.list` (cohort-shared msisensor scan, 1–3 h) —
   detection results survive every clean.
+- Second protection wave (independent bioinformatics audit): Picard
+  `dup_metrics.txt`, Mutect2 `.filteringStats.tsv`, and scRNA FastQC HTMLs are
+  protected — all are measurement results and/or ingestion inputs of the
+  protected MultiQC report (an unprotected input would silently vanish from a
+  re-rendered report).
+- `docs/artifacts.md` — complete output inventory: every declared output
+  (1,543 files on the reference cohort) classified A/B/C by cleanup handling,
+  per-module tables, the never-tracked (D) side-product list, and what each
+  cleanup strategy (S1–S5) does to each class.
+- `clean_intermediates.sh --apply` tarball extended to capture the
+  evidence-grade undeclared side products before deletion: `msi/{pair_id}_all`
+  (backs the MSI-cohort BH correction), Manta germline/candidate VCFs, scRNA
+  per-cell results (`QC_Cluster.h5ad`, `singlecell.csv`, report HTMLs), and
+  STAR `SJ.out.tab` junction tables.
 - `scripts/clean_intermediates.sh` — one-click cleanup wrapper: dry-run
   preview by default, `--mode all --apply` backs up `deliver/ report/ ascat/
   msi/` to a timestamped tarball then runs `oxo-flow clean --force`.

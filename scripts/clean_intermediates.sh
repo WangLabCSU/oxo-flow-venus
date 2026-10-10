@@ -54,10 +54,19 @@ fi
 STAMP="$(date +%Y%m%d-%H%M%S)"
 if [ "$APPLY" = "1" ] && [ "$BACKUP" = "1" ]; then
     mkdir -p backups
-    echo "== backup: deliver/ report/ ascat/ msi/ -> backups/cleanup-${STAMP}.tar.gz"
+    echo "== backup: deliver/ report/ ascat/ msi/ + undeclared evidence -> backups/cleanup-${STAMP}.tar.gz"
     # Belt-and-braces: deliver/*.msi.tsv and msi/reference.list are already
     # protected, but msi/ also holds the undeclared {pair_id}_all locus detail.
-    tar czf "backups/cleanup-${STAMP}.tar.gz" deliver report ascat msi
+    # The extra paths are undeclared evidence-grade side products that `clean`
+    # never sees: germline/candidate Manta VCFs, scRNA per-cell results
+    # (QC_Cluster.h5ad, singlecell.csv, report HTMLs) and STAR junctions.
+    tar czf "backups/cleanup-${STAMP}.tar.gz" --ignore-failed-read \
+        deliver report ascat msi \
+        manta/*/results/variants \
+        scrna/count/*/outs/analysis \
+        scrna/count/*/outs/singlecell.csv \
+        scrna/count/*/outs/*_scRNA_report.html \
+        rna/star/*/_STAR/SJ.out.tab
     du -h "backups/cleanup-${STAMP}.tar.gz"
 fi
 
