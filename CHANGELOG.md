@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MultiQC aggregation inputs protected (`fastp.json`/`.fastp.html`,
   fastqc HTML reports) so the protected cohort QC report stays re-renderable
   after a clean.
+- MSI products protected: `deliver/{pair_id}.msi.tsv` (per-pair clinical
+  score) and `msi/reference.list` (cohort-shared msisensor scan, 1–3 h) —
+  detection results survive every clean.
 - `scripts/clean_intermediates.sh` — one-click cleanup wrapper: dry-run
   preview by default, `--mode all --apply` backs up `deliver/ report/ ascat/
   msi/` to a timestamped tarball then runs `oxo-flow clean --force`.

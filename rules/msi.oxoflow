@@ -18,6 +18,9 @@ name = "msisensor_scan"
 description = "Scan reference genome for microsatellites (cohort-shared, once)"
 input = ["{config.genome_fa}"]
 output = ["msi/reference.list"]
+# The reference scan is a detection-input result of the MSI module and costs
+# 1-3 h of compute on hg38; protect it so `clean` never deletes it.
+protected_output = ["msi/reference.list"]
 threads = 4
 memory = "8G"
 environment = { pixi = "envs/msi/pixi.toml" }
@@ -36,6 +39,8 @@ input = [
     "bqsr/{control}/{control}.bqsr.bam",
 ]
 output = ["deliver/{pair_id}.msi.tsv"]
+# Per-pair MSI score is a clinical detection result — must survive any clean.
+protected_output = ["deliver/{pair_id}.msi.tsv"]
 threads = 4
 memory = "8G"
 environment = { pixi = "envs/msi/pixi.toml" }

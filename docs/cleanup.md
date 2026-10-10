@@ -65,7 +65,7 @@ patterns, expands wildcards, and deletes only what is not protected.
 ### What survives a full clean
 
 - **Delivery** (`deliver/`): PASS somatic VCF+TBI, VEP-annotated VCF+TBI, MAF,
-  SV VCF+TBI (paired + tumor-only).
+  SV VCF+TBI (paired + tumor-only), per-pair MSI scores (`{pair_id}.msi.tsv`).
 - **Full filtered call sets** (`vcf.filtered/{pair_id}.vcf.gz` + `.tbi`):
   `select_pass` keeps only the PASS subset, so the records rejected by
   FilterMutectCalls (germline/strand-bias/PoN) exist only here — primary
@@ -84,6 +84,9 @@ patterns, expands wildcards, and deletes only what is not protected.
 - **CNVkit** (`cnv/`): per-pair `.cnr`/`.call.cns`/`.cnv.png` + reference.cnn
   (the `{pair_id}` files are symlinks to `{experiment}` files; protecting only
   the aliases would leave dangling links, so both sides are protected).
+- **MSI** (`msi/reference.list` + `deliver/{pair_id}.msi.tsv`): the
+  cohort-shared microsatellite scan (1–3 h on hg38) and the per-pair clinical
+  MSI scores are detection results and protected.
 - **RNA**: STAR `Log.final.out` + `ReadsPerGene.out.tab` (QC products),
   featureCounts per-sample tables, cohort count matrix, RNA QC summary. The big
   STAR BAM is deliberately **not** protected — it is the single largest
@@ -103,8 +106,8 @@ Everything declared and unprotected: trim FASTQs (~1 TB), alignment BAMs and
 their declared indexes (`align/{sample}/{sample}.sorted.bam`,
 `.markdup.bam` + metrics, `bqsr/{experiment}/*.bqsr.bam` + `.bai` +
 `.recal.table`), the `vcf.raw/` scatter chain, the per-pair
-`.filteringStats.tsv`, `msi/reference.list` + `deliver/{pair_id}.msi.tsv`,
-CNVkit scratch beyond the protected set, scRNA `raw_matrix/`. On the current
+`.filteringStats.tsv`, CNVkit scratch beyond the protected set, scRNA
+`raw_matrix/`. On the current
 cohort this is the bulk of the ~2 TB of scratch; note the undeclared leftovers
 below stay behind, so `du` will not drop by the full estimate.
 
@@ -118,15 +121,15 @@ recomputing the rest of the DAG for free.
 
 ### MSI caveat
 
-`rules/msi.oxoflow` is intentionally untouched, so a full clean deletes the
-declared, unprotected MSI products: `deliver/{pair_id}.msi.tsv` (per-pair
-result) and `msi/reference.list` (the cohort-shared msisensor scan, 1–3 h).
-The per-pair locus detail `msi/{pair_id}_all` is an undeclared side product of
-`msi_paired` and survives by accident — do not rely on it.
-`clean_intermediates.sh --apply` backs up `deliver/ report/ ascat/ msi/` into
-a timestamped `backups/cleanup-<stamp>.tar.gz` before deleting (skip with
-`--no-backup`), which covers all of the above. If you edit `msi.oxoflow` later,
-add `protected_output` there and the script's backup stays harmless.
+Both declared MSI products are protected: `deliver/{pair_id}.msi.tsv` (per-pair
+clinical score) and `msi/reference.list` (the cohort-shared msisensor scan,
+1–3 h on hg38). The per-pair locus detail `msi/{pair_id}_all` is an undeclared
+side product of `msi_paired` and therefore survives a clean by accident — the
+engine never touches undeclared files, but do not rely on it (see leftovers
+below).
+`clean_intermediates.sh --apply` still backs up `deliver/ report/ ascat/ msi/`
+into a timestamped `backups/cleanup-<stamp>.tar.gz` before deleting (skip with
+`--no-backup`); the tarball additionally captures `msi/{pair_id}_all`.
 
 ### Undeclared leftovers not covered by `clean`
 
@@ -142,6 +145,9 @@ after a clean and must be removed manually if space is critical:
   is the germline call set, worth archiving before deleting).
 - `cnv/{pair_id}/GRCh38*.bed` — the target/antitarget BEDs copied in as
   cnvkit inputs.
+- `msi/{pair_id}_all` — per-pair msisensor locus detail (undeclared side
+  product; treat as unverified scratch unless you need per-locus audit).
+- `logs/**` — per-rule log files; `clean` never touches logs.
 - `scrna/count/{sample}/outs/` side products outside the declared list:
   `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, and the per-sample
   `{sample}_scRNA_report.html`.

@@ -3,11 +3,8 @@
 #
 # Two modes (see docs/cleanup.md for the full rationale):
 #   --mode all    clean EVERY intermediate that is not protected_output
-#                 (engine `oxo-flow clean --force`). Delivery/report/ASCAT/CNV
-#                 products are protected in rules/*.oxoflow and survive.
-#                 WARNING: MSI products live in rules/msi.oxoflow which is
-#                 deliberately NOT marked protected — they are backed up here
-#                 and re-running msisensor costs 1-3 h/pair.
+#                 (engine `oxo-flow clean --force`). Delivery/report/ASCAT/CNV/
+#                 MSI products are protected in rules/*.oxoflow and survive.
 #   --mode useless  clean only "useless" scratch (engine temporary=true
 #                 tombstones). NOT USABLE YET: tombstone cleanup silently
 #                 skips wildcard-rule outputs on current oxo-flow engines
@@ -58,8 +55,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 if [ "$APPLY" = "1" ] && [ "$BACKUP" = "1" ]; then
     mkdir -p backups
     echo "== backup: deliver/ report/ ascat/ msi/ -> backups/cleanup-${STAMP}.tar.gz"
-    # report/ already contains tmb/ and signatures/; msi/ covers the unprotected
-    # msisensor products (deliver/*.msi.tsv + msi/{pair_id}_all).
+    # Belt-and-braces: deliver/*.msi.tsv and msi/reference.list are already
+    # protected, but msi/ also holds the undeclared {pair_id}_all locus detail.
     tar czf "backups/cleanup-${STAMP}.tar.gz" deliver report ascat msi
     du -h "backups/cleanup-${STAMP}.tar.gz"
 fi
