@@ -43,8 +43,8 @@ tombstone, no diagnostic. All eight venus scratch rules are wildcard rules, so
 mode A is currently a no-op. Do NOT work around this with manual `rm`: deleting
 outputs without checkpoint bookkeeping marks the producers stale and would
 trigger recomputation of the completed campaign on the next `oxo-flow run`.
-Tracked upstream; until then use `--mode all` to reclaim the same scratch
-(see below).
+Tracked upstream as [Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844);
+until it lands use `--mode all` to reclaim the same scratch (see below).
 
 ## Mode B — one-click clean of all intermediates (`protected_output` + `clean`)
 

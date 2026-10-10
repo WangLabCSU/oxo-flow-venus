@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trade-off, the MSI caveat, and undeclared leftovers (`markdup.bam.bai`,
   manta workspaces, CNVkit helper `.cnn` files).
 - Known engine gap documented: tombstone cleanup for wildcard-rule outputs is
-  not yet supported, so `temporary` cleanup is dormant until the engine fix.
+  not yet supported ([Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844)),
+  so `temporary` cleanup is dormant until the engine fix.
 
 ## [0.3.0] - 2026-10-05
 

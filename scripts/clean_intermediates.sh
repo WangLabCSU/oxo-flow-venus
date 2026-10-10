@@ -45,7 +45,7 @@ if [ "$MODE" = "useless" ]; then
     cat <<'EOF'
 --mode useless relies on engine `temporary = true` tombstone cleanup, which
 currently SILENTLY NO-OPS for wildcard rules (every venus scratch rule has
-{wildcard} outputs). Tracked upstream; until it lands, use `--mode all` to
+{wildcard} outputs). Tracked upstream (Traitome/oxo-flow#844); until it lands, use `--mode all` to
 reclaim scratch (delivery/report/ASCAT/CNV products stay protected), or wait.
 
 Nothing was deleted.
