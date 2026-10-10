@@ -47,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Known engine gap documented: tombstone cleanup for wildcard-rule outputs is
   not yet supported ([Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844)),
   so `temporary` cleanup is dormant until the engine fix.
+- Third protection wave (archive-grade intermediates): BQSR analysis-ready
+  BAMs + indexes + recal tables (`bqsr/{sample}/{sample}.bqsr.bam`/`.bai`/
+  `.recal.table`, ~1 TB cohort-wide), STAR aligned BAMs (~31 GB), scRNA
+  matrix trios (`raw_matrix/` for SoupX/DecontX/scDblFinder and
+  `filter_matrix/` — the 10x MEX Seurat ingests) + per-sample report HTMLs,
+  and MSI per-pair locus detail (`msi/{pair_id}_all`, backs the
+  `report/msi_cohort.tsv` BH correction) + `_unstable` summaries are
+  protected. Any re-analysis after a clean now needs **no** realignment and
+  no recount; the undeclared-path protections are pattern-based, so no
+  completed instance goes stale. Census: 693 protected / 840 temporary /
+  20 declared-deletable (only `markdup.bam`) of 1,553; a full mode-B clean
+  reclaims ≈1.7 TB.
 
 ### Fixed
 - Output census arithmetic: the declared-output total is **1,553** (protected

@@ -18,12 +18,13 @@ output = [
     "rna/star/{sample}/{sample}.Log.final.out",
     "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
 ]
-# Keep ONLY the small QC products (Log.final.out feeds rna_qc_summary,
-# ReadsPerGene.out.tab feeds quick counts). The big Aligned BAM is left
-# unprotected on purpose: it is the single largest beneficial-to-drop RNA
-# intermediate (regenerable from trim FASTQs; featureCounts only needs it at
-# run time).
+# Keep the small QC products (Log.final.out feeds rna_qc_summary,
+# ReadsPerGene.out.tab feeds quick counts) plus the aligned BAM: the BAM is
+# the archive-grade RNA product (junction discovery / IGV / re-counting
+# without re-alignment) and costs only ~31 GB cohort-wide — cheap insurance
+# next to the days-scale DNA realignment a loss would piggyback on.
 protected_output = [
+    "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
     "rna/star/{sample}/{sample}.Log.final.out",
     "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
 ]

@@ -76,6 +76,17 @@ output = [
     "bqsr/{sample}/{sample}.bqsr.bam",
     "bqsr/{sample}/{sample}.bqsr.bai",
 ]
+# Analysis-ready BAMs: every caller downstream (Mutect2, Manta, ASCAT,
+# CNVkit, MSIsensor) consumes them, so a clean that deletes them turns ANY
+# re-analysis into a full BWA-MEM2 realignment (days over 20 WGS samples).
+# Same standing as TCGA-style aligned BAMs: archive-grade intermediates.
+# The recal.table is the BQSR model itself — KB-scale, keep it as audit
+# evidence. ~1 TB cohort-wide, by far the largest protection.
+protected_output = [
+    "bqsr/{sample}/{sample}.recal.table",
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
 log = "logs/bqsr/{sample}.log"
 threads = 8
 memory = "32G"

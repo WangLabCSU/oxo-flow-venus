@@ -43,7 +43,19 @@ input = [
 ]
 output = ["deliver/{pair_id}.msi.tsv"]
 # Per-pair MSI score is a clinical detection result — must survive any clean.
-protected_output = ["deliver/{pair_id}.msi.tsv"]
+# `{pair_id}_all` (per-locus detail) is evidence-grade: the protected
+# `report/msi_cohort.tsv` BH-corrects over its per-locus counts. `_unstable`
+# (114 B) is the instability summary. Both are written beside the declared
+# output rather than declared themselves; protecting them here is pattern-
+# based (valid without an output-list change, so no completed instance goes
+# stale) and already covers them if they are ever formally declared. `_dis`
+# (~1.1 GB/pair of per-locus distributions) stays deletable — the only MSI
+# leftover worth reclaiming for space.
+protected_output = [
+    "deliver/{pair_id}.msi.tsv",
+    "msi/{pair_id}_all",
+    "msi/{pair_id}_unstable",
+]
 threads = 4
 memory = "8G"
 environment = { pixi = "envs/msi/pixi.toml" }

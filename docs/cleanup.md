@@ -1,7 +1,11 @@
 # Cleaning intermediates in the venus workdir
 
 The venus cohort workdir (`processed-wsx`) holds ~2.7 TB across 1553 declared
-for 10 CRC pairs. Two cleanup modes are supported:
+outputs for 10 CRC pairs. After the 2026-10 protection wave (bqsr + STAR BAMs,
+scRNA matrix trios + report HTMLs, MSI `_all`/`_unstable`) a full mode-B clean
+reclaims ≈1.7 TB — see [artifacts.md](artifacts.md) for the file-level census
+(693 protected / 840 temporary / 20 declared-deletable). Two cleanup modes are
+supported:
 
 | Mode | Flag | Mechanism | Status |
 |------|------|-----------|--------|
@@ -50,6 +54,12 @@ outputs without checkpoint bookkeeping marks the producers stale and would
 trigger recomputation of the completed campaign on the next `oxo-flow run`.
 Tracked upstream as [Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844);
 until it lands use `--mode all` to reclaim the same scratch (see below).
+The engine's disk-pressure auto-reclaim
+([#843](https://github.com/Traitome/oxo-flow/issues/843)) respects
+`protected_output` as well, and its current fail-safe also declines to reclaim
+wildcard-fan-out scratch rules — so venus scratch is not auto-reclaimed from
+under you by that path either, and the protections above hold across clean,
+reclaim, and (future) tombstone.
 
 ## Mode B — one-click clean of all intermediates (`protected_output` + `clean`)
 
@@ -66,17 +76,23 @@ patterns, expands wildcards, and deletes only what is not protected.
 
 - **Delivery** (`deliver/`): PASS somatic VCF+TBI, VEP-annotated VCF+TBI, MAF,
   SV VCF+TBI (paired + tumor-only), per-pair MSI scores (`{pair_id}.msi.tsv`).
+- **Analysis-ready BAMs** (`bqsr/{sample}/{sample}.bqsr.bam` + `.bai` +
+  `.recal.table`, `rna/star/{sample}/*.Aligned.sortedByCoord.out.bam`):
+  every caller downstream (Mutect2, Manta, ASCAT, CNVkit, MSIsensor) consumes
+  the bqsr BAMs, and the STAR BAM is the archive-grade RNA product — protecting
+  them (~1 TB + ~31 GB cohort-wide) means any re-analysis needs **no**
+  BWA-MEM2/STAR realignment. TCGA-style archive layer.
 - **Full filtered call sets** (`vcf.filtered/{pair_id}.vcf.gz` + `.tbi`):
   `select_pass` keeps only the PASS subset, so the records rejected by
   FilterMutectCalls (germline/strand-bias/PoN) exist only here — primary
-  evidence for sensitivity audits. Regenerating them requires the whole
-  `vcf.raw` chain, whose inputs (bqsr BAMs) a clean deletes, i.e. realignment.
-  The per-pair `.filteringStats.tsv` (audit record of the filtering step) is
-  protected with them.
+  evidence for sensitivity audits. If ever lost, regenerating them means
+  re-running the `vcf.raw` chain (Mutect2 over the *surviving* bqsr BAMs —
+  no realignment). The per-pair `.filteringStats.tsv` (audit record of the
+  filtering step) is protected with them.
 - **Manta scored calls** (`manta/{pair_id}/results/variants/somaticSV.vcf.gz`
   + `.tbi` paired, `candidateSV.vcf.gz` + `.tbi` tumor-only): the full scored
   somatic set behind the PASS-only delivery VCF, and the unfiltered candidate
-  superset. Manta re-runs need the deleted bqsr BAMs.
+  superset. Manta re-runs consume the surviving bqsr BAMs directly.
 - **Report** (`report/`): clinical report MD+HTML, methods section, per-pair
   TMB, MSI cohort table, scRNA metrics, cohort summary, signature counts +
   exposures.
@@ -85,17 +101,21 @@ patterns, expands wildcards, and deletes only what is not protected.
 - **CNVkit** (`cnv/`): per-pair `.cnr`/`.call.cns`/`.cnv.png` + reference.cnn
   (the `{pair_id}` files are symlinks to `{experiment}` files; protecting only
   the aliases would leave dangling links, so both sides are protected).
-- **MSI** (`msi/reference.list` + `deliver/{pair_id}.msi.tsv`): the
-  cohort-shared microsatellite scan (1–3 h on hg38) and the per-pair clinical
-  MSI scores are detection results and protected.
-- **RNA**: STAR `Log.final.out` + `ReadsPerGene.out.tab` (QC products),
-  featureCounts per-sample tables, cohort count matrix, RNA QC summary. The big
-  STAR BAM is deliberately **not** protected — it is the single largest
-  beneficial-to-drop RNA intermediate (regenerable from trim FASTQs).
-- **scRNA**: `filter_feature.h5ad`, cluster/marker CSVs, `metrics_summary.xls`,
-  QC tables, cohort clusters. The huge `raw_matrix/` is deliberately left
-  unprotected (re-running `scrna_count` is the most expensive recompute in the
-  pipeline — treat these protections as load-bearing).
+- **MSI** (`msi/reference.list` + `deliver/{pair_id}.msi.tsv` + the per-pair
+  `msi/{pair_id}_all` locus detail and `_unstable` summary): the cohort-shared
+  microsatellite scan (1–3 h on hg38), the clinical scores, and the
+  evidence-grade locus detail are protected — `report/msi_cohort.tsv`
+  BH-corrects over the per-locus counts `_all` holds.
+- **RNA**: the STAR aligned BAM (archive-grade: junction discovery / IGV /
+  re-counting without re-alignment) plus `Log.final.out` +
+  `ReadsPerGene.out.tab` (QC products), featureCounts per-sample tables,
+  cohort count matrix, RNA QC summary.
+- **scRNA**: both count-matrix trios — `raw_matrix/` (the layer
+  SoupX/DecontX/scDblFinder ingest) and `filter_matrix/` (the 10x MEX Seurat's
+  `Read10X` ingests directly) — plus `filter_feature.h5ad`, cluster/marker
+  CSVs, `metrics_summary.xls`, the per-sample report HTML, QC tables, cohort
+  clusters. The matrices are load-bearing: re-running `scrna_count` is the
+  most expensive recompute in the pipeline.
 - **QC**: multiqc report + general-stats table, plus the per-sample inputs it
   aggregates (`qc/trim/{sample}.fastp.json`/`.fastp.html`,
   `qc/fastqc/{sample}_R{1,2}.trim_fastqc.html`) so the protected report stays
@@ -106,15 +126,14 @@ patterns, expands wildcards, and deletes only what is not protected.
 
 ### What is deleted and what that costs
 
-Everything declared and unprotected: trim FASTQs (~1 TB), alignment BAMs and
-their declared indexes (`align/{sample}/{sample}.sorted.bam`,
-`.markdup.bam`, `bqsr/{sample}/*.bqsr.bam` + `.bai` +
-`.recal.table`), the `vcf.raw/` scatter chain (the declared `.vcf.gz` /
+Everything declared and unprotected: trim FASTQs (~1 TB), alignment scratch
+(`align/{sample}/{sample}.sorted.bam` and `.markdup.bam` — the analysis-ready
+bqsr BAMs survive), the `vcf.raw/` scatter chain (the declared `.vcf.gz` /
 `.vcf.gz.stats` / `{chr}.tar.gz` files — but not the 240 undeclared
-`{chr}.vcf.gz.tbi` indexes, which `clean` cannot see), CNVkit scratch beyond
-the protected set, scRNA `raw_matrix/`. On the current
-cohort this is the bulk of the ~2 TB of scratch; note the undeclared leftovers
-below stay behind, so `du` will not drop by the full estimate.
+`{chr}.vcf.gz.tbi` indexes, which `clean` cannot see), and CNVkit scratch
+beyond the protected set. On the current cohort this is ≈1.7 TB; note the
+undeclared leftovers below stay behind, so `du` will not drop by the full
+estimate.
 
 **Recompute-on-demand trade-off.** `oxo-flow clean` deletes files but does not
 edit `.oxo-flow/checkpoint.json`. After a clean, `oxo-flow plan` reports every
@@ -126,19 +145,20 @@ recomputing the rest of the DAG for free.
 
 ### MSI caveat
 
-Both declared MSI products are protected: `deliver/{pair_id}.msi.tsv` (per-pair
-clinical score) and `msi/reference.list` (the cohort-shared msisensor scan,
-1–3 h on hg38). The per-pair locus detail `msi/{pair_id}_all` (with its
-`_dis`/`_unstable` siblings) is an undeclared
-side product of `msi_paired` and therefore survives a clean by accident — the
-engine never touches undeclared files, but do not rely on it. It is
-evidence-grade: the protected `report/msi_cohort.tsv` BH-corrects over the
-per-locus counts it holds.
+All evidence-grade MSI products are protected: `deliver/{pair_id}.msi.tsv`
+(per-pair clinical score), `msi/reference.list` (the cohort-shared msisensor
+scan, 1–3 h on hg38), and the per-pair `msi/{pair_id}_all` locus detail +
+`_unstable` summary. The `_all`/`_unstable` protection is pattern-based — it
+covers these undeclared side products of `msi_paired` without an output-list
+change, so they survive every clean by design rather than by accident.
+`report/msi_cohort.tsv` BH-corrects over the per-locus counts `_all` holds.
+Only `_dis` (~1.1 GB/pair of per-locus distributions, ~11 GB cohort-wide)
+remains deletable.
 `clean_intermediates.sh --apply` backs up `deliver/ report/ ascat/ msi/` into
 a timestamped `backups/cleanup-<stamp>.tar.gz` before deleting (skip with
-`--no-backup`); the tarball additionally captures the evidence-grade
-undeclared leftovers (`msi/{pair_id}_all`, Manta germline/candidate VCFs, scRNA
-per-cell results and report HTMLs, STAR junction tables).
+`--no-backup`); the tarball additionally captures the remaining undeclared
+evidence (Manta germline/candidate VCFs, scRNA per-cell results and report
+HTMLs, STAR junction tables) as belt-and-braces.
 
 ### Undeclared leftovers not covered by `clean`
 
@@ -163,20 +183,21 @@ after a clean and must be removed manually if space is critical:
   and the `{sample}._STARgenome/` / `{sample}._STARpass1/` dirs.
 - `msi/{pair_id}_all`, `{pair_id}_dis`, `{pair_id}_unstable` — the per-pair
   msisensor side products (msisensor-pro writes all three under the
-  `-o msi/{pair_id}` prefix). `_all` is the per-locus detail,
-  evidence-grade: `report/msi_cohort.tsv` BH-corrects over its per-locus
-  counts, so archive rather than delete. `_dis` holds the per-locus
-  distributions (~1.1 GB per pair, ~11 GB cohort-wide — the only MSI leftover
-  worth deleting for space); `_unstable` is the 114-byte instability summary.
+  `-o msi/{pair_id}` prefix). `_all` and `_unstable` are protected
+  (pattern-based) and survive every clean; `_dis` holds the per-locus
+  distributions (~1.1 GB per pair, ~11 GB cohort-wide) and is the only MSI
+  leftover worth deleting for space.
   `clean_intermediates.sh --apply` archives the whole `msi/` dir, so all
   three land in the tarball before any deletion.
 - `logs/**` — per-rule log files; `clean` never touches logs.
 - `scrna/count/{sample}/outs/` side products outside the declared list:
-  `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, the per-sample
-  `{sample}_scRNA_report.html`, and the terminal per-cell results
+  `anno_decon_sorted.bam` + `.bai` (scRNA's weakest asset — downstream reads
+  matrices, not BAMs), and the terminal per-cell results
   `outs/analysis/QC_Cluster.h5ad` + `outs/singlecell.csv` (not consumed by
   `scrna_qc_cluster`, but they are per-cell measurement outputs — archive,
-  do not treat as scratch).
+  do not treat as scratch). `filter_matrix/` and the per-sample
+  `{sample}_scRNA_report.html` are undeclared but protected and survive every
+  clean.
 
 ## Verifying before you clean
 

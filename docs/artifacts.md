@@ -38,9 +38,9 @@ EOF
 
 | Class | Meaning | Engine mechanism | Files (this cohort) |
 |---|---|---|---|
-| **A — protected** | Detection/measurement results, delivery artifacts, expensive report-facing products. Survive every clean. | `protected_output = [...]` | **593** (38%) |
+| **A — protected** | Detection/measurement results, delivery artifacts, expensive report-facing products, archive-grade BAMs/matrices. Survive every clean. | `protected_output = [...]` | **693** (45%) |
 | **B — temporary scratch** | Fully regenerable intermediates, only feed downstream rules. Slated for automatic post-success deletion. | `temporary = true` | **840** (54%) |
-| **C — declared, deletable** | Intermediates without either marker. Deleted by `clean`, survive normal operation. | declared `output` only | **120** (8%) |
+| **C — declared, deletable** | Intermediates without either marker. Deleted by `clean`, survive normal operation. | declared `output` only | **20** (1%) — only `align/{sample}/{sample}.markdup.bam` |
 | **D — undeclared leftovers** | Side products the engine never tracks. `clean` cannot see them. | not declared | logs + per-tool extras |
 
 ## What each strategy does to each class
@@ -50,7 +50,7 @@ EOF
 | **S1** Auto-tombstone after successful run (Mode A) | keep | delete *(dormant — pending engine [#844](https://github.com/Traitome/oxo-flow/issues/844))* | keep | keep |
 | **S2** `oxo-flow clean` (dry-run) | nothing deleted, preview only | | | |
 | **S3** `oxo-flow clean --force` (Mode B) | keep | delete | delete | keep |
-| **S4** `scripts/clean_intermediates.sh --mode all --apply` | keep (tar backup of `deliver/ report/ ascat/ msi/` first) | delete | delete | keep (tar additionally captures the evidence-grade leftovers: `msi/{pair}_all`, Manta variant VCFs, scRNA per-cell results, STAR junctions) |
+| **S4** `scripts/clean_intermediates.sh --mode all --apply` | keep (tar backup of `deliver/ report/ ascat/ msi/` first) | delete | delete | keep (tar additionally captures the remaining D-class evidence: Manta variant VCFs, scRNA per-cell results, STAR junctions, MSI `_dis` distributions) |
 | **S5** manual `rm` of a declared file | destroys the result or marks its producer **stale** → next `run` recomputes it and every ancestor | | | no bookkeeping impact, but no safety net |
 
 Notes:
@@ -89,9 +89,9 @@ chr-scattered pattern.
 | Rule (×n) | Output | Class | Notes |
 |---|---|---|---|
 | `bwa_mem2` ×20 | `align/{sample}/{sample}.sorted.bam` | B | hundreds of GB; the biggest single scratch class |
-| `mark_duplicates` ×20 | `align/{sample}/{sample}.markdup.bam` | C | regenerable from sorted.bam |
+| `mark_duplicates` ×20 | `align/{sample}/{sample}.markdup.bam` | C | regenerable from sorted.bam; **the only declared deletable class left** — its information is fully subsumed by the bqsr BAM |
 | `mark_duplicates` | `align/{sample}/{sample}.dup_metrics.txt` | **A** | library QC measurement; feeds the protected MultiQC report |
-| `bqsr` ×20 | `bqsr/{sample}/{sample}.recal.table` / `.bqsr.bam` / `.bqsr.bai` | C | the BAMs every caller consumes; a full clean deletes them → realignment |
+| `bqsr` ×20 | `bqsr/{sample}/{sample}.recal.table` / `.bqsr.bam` / `.bqsr.bai` | **A** | analysis-ready BAMs every caller consumes (Mutect2/Manta/ASCAT/CNVkit/MSIsensor) — TCGA-style archive layer; ~1 TB cohort-wide, protected so re-analysis never means realignment |
 
 ### Somatic SNV/indel (`rules/varcall.oxoflow`, `rules/varcall_merge.oxoflow`)
 
@@ -144,7 +144,8 @@ chr-scattered pattern.
 |---|---|---|---|
 | `msisensor_scan` ×1 | `msi/reference.list` | **A** | cohort-shared microsatellite scan, 1–3 h on hg38 |
 | `msi_paired` ×10 | `deliver/{pair_id}.msi.tsv` | **A** | per-pair clinical MSI score (detection result) |
-| — | `msi/{pair_id}_all`, `{pair_id}_dis`, `{pair_id}_unstable` | D | msisensor side products: `_all` = per-locus detail (backs the BH correction), `_dis` = per-locus distributions (~1.1 GB/pair), `_unstable` = instability summary; undeclared, survive clean by accident |
+| `msi_paired` | `msi/{pair_id}_all` + `msi/{pair_id}_unstable` (undeclared but protected) | **A** | `_all` is evidence-grade per-locus detail — the protected `report/msi_cohort.tsv` BH-corrects over its counts; `_unstable` (114 B) is the instability summary. Protection is pattern-based, valid without an output-list change |
+| — | `msi/{pair_id}_dis` | D | per-locus distributions, ~1.1 GB/pair (~11 GB cohort-wide) — the only MSI leftover worth reclaiming |
 
 ### Signatures (`rules/signature.oxoflow`)
 
@@ -156,7 +157,7 @@ chr-scattered pattern.
 
 | Rule (×n) | Output | Class | Notes |
 |---|---|---|---|
-| `star_align` ×10 | `rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam` | C | largest beneficial-to-drop RNA intermediate |
+| `star_align` ×10 | `rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam` | **A** | archive-grade RNA BAM (~31 GB cohort-wide): junction discovery / IGV / re-counting without re-alignment |
 | `star_align` | `rna/star/{sample}/{sample}.Log.final.out` + `.ReadsPerGene.out.tab` | **A** | QC products |
 | `featurecounts` ×10 | `rna/counts/{sample}.featurecounts.txt` + `.summary` | **A** | |
 | `merge_counts` ×1 | `rna/counts/cohort.gene_counts.txt` | **A** | cohort matrix |
@@ -167,11 +168,11 @@ chr-scattered pattern.
 | Rule (×n) | Output | Class | Notes |
 |---|---|---|---|
 | `scrna_fastqc` ×10 | `scrna/fastqc/{sample}_SC_R{1,2}_fastqc.html` | **A** | QC measurement; feeds the protected MultiQC report |
-| `scrna_count` ×10 | `scrna/count/{sample}/outs/raw_matrix/{matrix.mtx,features.tsv,barcodes.tsv}.gz` | C | **re-running scrna_count is the most expensive recompute in the pipeline** — deleting these forces a full recount if any scRNA product is ever needed again |
-| `scrna_count` | `outs/filter_feature.h5ad`, `outs/analysis/{cluster,marker}.csv`, `outs/metrics_summary.xls` | **A** | detection results |
+| `scrna_count` ×10 | `scrna/count/{sample}/outs/raw_matrix/{matrix.mtx,features.tsv,barcodes.tsv}.gz` | **A** | unfiltered (all-barcodes) count matrix — the layer ambient-RNA/doublet tools (SoupX, DecontX, scDblFinder) ingest; **re-running scrna_count is the most expensive recompute in the pipeline**, so the matrix trio is protected |
+| `scrna_count` | `outs/filter_matrix/{matrix.mtx,features.tsv,barcodes.tsv}.gz` (undeclared but protected) + `outs/filter_feature.h5ad`, `outs/analysis/{cluster,marker}.csv`, `outs/metrics_summary.xls`, `outs/{sample}_scRNA_report.html` (undeclared but protected) | **A** | filter_matrix/ is the 10x MEX trio Seurat's `Read10X` ingests directly; h5ad/CSVs/xls are detection results; the 2.8 MB report HTML is the dnbc4tools QC deliverable. The protection is pattern-based, so these survive every clean even though `clean` itself only deletes declared outputs |
 | `scrna_qc_cluster` ×10 | `scrna/qc/{sample}.clusters.tsv` | **A** | |
 | `scrna_integrate` ×1 | `scrna/cohort_clusters.tsv` | **A** | |
-| — | `outs/anno_decon_sorted.bam` + `.bai`, `outs/filter_matrix/`, `{sample}_scRNA_report.html` | D | dnbc4tools side products |
+| — | `outs/anno_decon_sorted.bam` + `.bai`, `outs/analysis/QC_Cluster.h5ad` (~1 GB/sample), `outs/singlecell.csv` (~98 MB/sample) | D | dnbc4tools side products: the BAM is scRNA's weakest asset (downstream reads matrices, not BAMs); the two per-cell results are terminal measurement outputs — S4's tarball archives them |
 
 ### Reports & cohort tables (`rules/report.oxoflow`)
 
@@ -196,9 +197,11 @@ chr-scattered pattern.
 | `ascat/{pair_id}/{experiment}_normal{LogR,BAF}.txt`, `{experiment}_normalBAF_rawBAF.txt` | ASCAT germline allele evidence (written by `run_ascat.R`) | 30 |
 | `rna/star/{sample}/{sample}.SJ.out.tab` | STAR splice-junction inventory (`--outFileNamePrefix rna/star/{sample}/{sample}.`) | 10 |
 | `rna/star/{sample}/{sample}.Log.out` / `.Log.progress.out`, `{sample}._STARgenome/`, `{sample}._STARpass1/`, one interrupted-run `*.bam.oxo-failed` | STAR run logs + 1st-pass genome dirs | ~20+ |
-| `scrna/count/{sample}/outs/{anno_decon_sorted.bam(.bai), filter_matrix/, {sample}_scRNA_report.html}` | dnbc4tools | ~4/sample |
+| `scrna/count/{sample}/outs/anno_decon_sorted.bam` + `.bai` | dnbc4tools (scRNA's weakest asset — downstream reads matrices, not BAMs) | 20 |
+| `scrna/count/{sample}/outs/filter_matrix/` + `{sample}_scRNA_report.html` | dnbc4tools — never-tracked but **protected** (see scrna module table), so they survive every clean anyway | 30 |
 | `scrna/count/{sample}/outs/analysis/QC_Cluster.h5ad`, `outs/singlecell.csv` | dnbc4tools per-cell results (terminal, not consumed by `scrna_qc_cluster`) | 20 |
-| `msi/{pair_id}_all` (~20 MB), `{pair_id}_dis` (~1.1 GB each ≈ 11 GB cohort-wide), `{pair_id}_unstable` (114 B) | msisensor-pro per-pair side products (`-o msi/{pair_id}` prefix) | 10 each |
+| `msi/{pair_id}_dis` (~1.1 GB each ≈ 11 GB cohort-wide) | msisensor-pro per-pair distributions (`-o msi/{pair_id}` prefix) — the only deletable MSI leftover | 10 |
+| `msi/{pair_id}_all` (~20 MB), `{pair_id}_unstable` (114 B) | msisensor-pro side products — never-tracked but **protected** (see MSI module table) | 10 each |
 | `logs/**` | every rule | ~560 |
 | `backups/cleanup-*.tar.gz` | `clean_intermediates.sh --apply` | per invocation |
 | `.oxo-flow/` | engine state (checkpoint, env manifests) | — engine-internal, never delete |
@@ -208,10 +211,9 @@ chr-scattered pattern.
 | Artifact | Why losing it is acceptable | Cost to regret it |
 |---|---|---|
 | trim FASTQs (B) | regenerate from `raw/` by re-running fastp | ~1 h/sample |
-| sorted/markdup/bqsr BAMs (B/C) | realign from trim FASTQs | **days** (full BWA-MEM2 over 20 WGS) |
-| `vcf.raw` scatter chain (B) | re-run Mutect2 | needs bqsr BAMs → realignment |
-| STAR BAM (C) | re-align from trim FASTQs | hours |
-| scRNA `raw_matrix` (C) | re-run dnbc4tools | **most expensive recompute in the pipeline** |
+| sorted + markdup BAMs (B/C) | realign from trim FASTQs | **days** (full BWA-MEM2 over 20 WGS) |
+| `vcf.raw` scatter chain (B) | re-run Mutect2 | hours–~day: the bqsr BAMs survive (A), so **no** realignment is needed |
+| manta `workspace/`, `evidence/`, cnvkit BEDs (D) | tool-internal scratch | none for results |
 | manta `workspace/`, `evidence/`, cnvkit BEDs (D) | tool-internal scratch | none for results (`{pair_id}_all` MSI locus detail is NOT on this list — it backs the protected `report/msi_cohort.tsv` BH correction and is tarred by S4) |
 
 ## Coverage statement

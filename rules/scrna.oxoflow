@@ -64,16 +64,31 @@ output = [
     "scrna/count/{sample}/outs/analysis/marker.csv",
     "scrna/count/{sample}/outs/metrics_summary.xls",
 ]
-# Keep the analysis products (h5ad, cluster/marker tables, metrics — days of
-# 16-thread/64G compute each and report inputs); leave raw_matrix (the huge
-# unfiltered matrix) unprotected so a full clean can reclaim it. Re-running
-# scrna_count is the most expensive recompute in the pipeline — treat these
-# protections as load-bearing.
+# Keep the analysis products (h5ad, cluster/marker tables, metrics) AND all
+# four count matrices: `filter_matrix/` is the 10x MEX trio that Seurat's
+# Read10X ingests directly, `raw_matrix/` is the unfiltered (all-barcodes)
+# matrix that ambient-RNA/doublet tools (SoupX, DecontX, scDblFinder) need.
+# Both are 10x MEX trios (~1.65 GB/sample combined) and unrecoverable without
+# re-running the most expensive recompute in the pipeline (dnbc4tools, days
+# of 16-thread/64G compute per sample) — treat these protections as
+# load-bearing. The per-sample report HTML (2.8 MB) is the dnbc4tools QC
+# deliverable. filter_matrix/ and the report are not declared outputs (the
+# engine never tracks them); the protection is pattern-based and future-proofs
+# them if they are ever formally declared. NOT protected: the per-cell
+# terminal results `outs/analysis/QC_Cluster.h5ad` (~1 GB/sample) and
+# `outs/singlecell.csv` (~98 MB/sample) — S4's tarball archives them.
 protected_output = [
+    "scrna/count/{sample}/outs/raw_matrix/matrix.mtx.gz",
+    "scrna/count/{sample}/outs/raw_matrix/features.tsv.gz",
+    "scrna/count/{sample}/outs/raw_matrix/barcodes.tsv.gz",
+    "scrna/count/{sample}/outs/filter_matrix/matrix.mtx.gz",
+    "scrna/count/{sample}/outs/filter_matrix/features.tsv.gz",
+    "scrna/count/{sample}/outs/filter_matrix/barcodes.tsv.gz",
     "scrna/count/{sample}/outs/filter_feature.h5ad",
     "scrna/count/{sample}/outs/analysis/cluster.csv",
     "scrna/count/{sample}/outs/analysis/marker.csv",
     "scrna/count/{sample}/outs/metrics_summary.xls",
+    "scrna/count/{sample}/outs/{sample}_scRNA_report.html",
 ]
 log = "logs/scrna_count/{sample}.log"
 threads = 16
