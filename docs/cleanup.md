@@ -135,15 +135,16 @@ after a clean and must be removed manually if space is critical:
 
 - `align/{sample}/{sample}.markdup.bai` — created by Picard `--CREATE_INDEX`
   (which replaces the `.bam` suffix) rather than declared as an output.
-- `manta/{pair_id}/workspace/`, run metadata (`runWorkflow.py`,
-  `*.config.pickle`, `workflow.*.log.txt`) and `results/stats/`; paired runs
-  also keep undeclared `results/variants/candidateSV.vcf.gz` and
-  `diploidSV.vcf.gz` (the latter is the germline call set — worth keeping or
-  archiving before deleting).
+- `manta/{pair_id}/workspace/`, `results/evidence/`, `results/stats/`, run
+  metadata (`runWorkflow.py`, `*.config.pickle`, `workflow.*.log.txt`); paired
+  runs also keep undeclared `results/variants/` VCFs beyond the protected one
+  (`candidateSV`, `candidateSmallIndels`, `diploidSV` + `.tbi` — `diploidSV`
+  is the germline call set, worth archiving before deleting).
 - `cnv/{pair_id}/GRCh38*.bed` — the target/antitarget BEDs copied in as
   cnvkit inputs.
-- `scrna/count/{sample}/outs/singlecell.csv` and other dnbc4tools side
-  products outside the declared list.
+- `scrna/count/{sample}/outs/` side products outside the declared list:
+  `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, and the per-sample
+  `{sample}_scRNA_report.html`.
 
 ## Verifying before you clean
 
