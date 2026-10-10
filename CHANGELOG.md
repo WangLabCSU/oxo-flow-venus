@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reclaims ≈1.7 TB.
 
 ### Fixed
+- `star_align` no longer hardcodes the read-group platform: the SAM `PL` tag
+  now comes from `config.read_group_platform` (the same key the DNA-side
+  `bwa_mem2` params use, default `"BGI"`), so DNA and RNA BAM headers always
+  agree. Rendered commands are unchanged on the current config, but the
+  engine fingerprints the shell *template*, so merging this stales the 10
+  completed `star_align` instances — merge and sync the workdir only in a
+  planned re-run window
+  ([#2](https://github.com/WangLabCSU/oxo-flow-venus/issues/2)).
 - Output census arithmetic: the declared-output total is **1,553** (protected
   **593**), matching the per-module tables; the headline previously
   undercounted by 10.
