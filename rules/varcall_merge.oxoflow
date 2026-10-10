@@ -85,9 +85,15 @@ output = [
     "vcf.filtered/{pair_id}.vcf.gz.tbi",
     "vcf.filtered/{pair_id}.vcf.gz.filteringStats.tsv",
 ]
-# Pure scratch: superseded by deliver/{pair_id}.somatic.pass.vcf.gz
-# (select_pass). Regenerable from the raw VCF chain without re-aligning.
-temporary = true
+# Keep the full filtered call set (vcf.filtered): select_pass keeps only the
+# PASS subset, so the filtered-out records (germline/strand-bias/PoN) exist
+# only here — primary evidence for sensitivity audits. Regenerating requires
+# the whole vcf.raw scatter chain, whose inputs (bqsr BAMs) a full clean
+# deletes (i.e. realignment). The tiny filteringStats.tsv stays deletable.
+protected_output = [
+    "vcf.filtered/{pair_id}.vcf.gz",
+    "vcf.filtered/{pair_id}.vcf.gz.tbi",
+]
 threads = 2
 memory = "16G"
 environment = { pixi = "envs/varcall/pixi.toml" }

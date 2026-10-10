@@ -22,9 +22,15 @@ output = [
 # Pure scratch: trimmed FASTQs regenerate from raw/ and only feed downstream
 # rules (fastqc/bwa_mem2/star_align) plus multiqc. Marked temporary so a full
 # successful run tombstones them; ~1 TB of trim FASTQs is the largest
-# reclaimable scratch in the cohort. NOTE: tombstone cleanup for wildcard
-# rules is pending engine support (see docs/cleanup.md).
+# reclaimable scratch in the cohort. The KB-scale fastp JSON/HTML stay
+# protected so the protected MultiQC report stays re-renderable after a
+# clean. NOTE: tombstone cleanup for wildcard rules is pending engine
+# support (see docs/cleanup.md).
 temporary = true
+protected_output = [
+    "qc/trim/{sample}.fastp.json",
+    "qc/trim/{sample}.fastp.html",
+]
 log = "logs/fastp/{sample}.log"
 threads = 8
 memory = "16G"
@@ -54,6 +60,12 @@ input = [
     "qc/trim/{sample}_R2.trim.fastq.gz",
 ]
 output = [
+    "qc/fastqc/{sample}_R1.trim_fastqc.html",
+    "qc/fastqc/{sample}_R2.trim_fastqc.html",
+]
+# Keep: KB-scale per-sample reports and inputs to the protected MultiQC
+# aggregation (a clean would otherwise freeze it at its last state).
+protected_output = [
     "qc/fastqc/{sample}_R1.trim_fastqc.html",
     "qc/fastqc/{sample}_R2.trim_fastqc.html",
 ]

@@ -32,6 +32,14 @@ output = [
     "manta/{pair_id}/results/variants/somaticSV.vcf.gz",
     "manta/{pair_id}/results/variants/somaticSV.vcf.gz.tbi",
 ]
+# Keep: somaticSV is the only full scored call set. sv_deliver_paired keeps
+# just the PASS subset; the filtered-out records (germline/strand-bias/PoN)
+# exist only here, and regenerating means re-running Manta on bqsr BAMs that
+# a full clean deletes (i.e. realignment of the whole sample).
+protected_output = [
+    "manta/{pair_id}/results/variants/somaticSV.vcf.gz",
+    "manta/{pair_id}/results/variants/somaticSV.vcf.gz.tbi",
+]
 threads = 8
 memory = "32G"
 environment = { pixi = "envs/sv/pixi.toml" }
@@ -58,6 +66,13 @@ input = [
     "{config.genome_fai}",
 ]
 output = [
+    "manta/{pair_id}/results/variants/candidateSV.vcf.gz",
+    "manta/{pair_id}/results/variants/candidateSV.vcf.gz.tbi",
+]
+# Keep: candidateSV is the unfiltered superset (all events Manta saw, before
+# scoring). The delivered copy is a byte-identical cp, but keeping the
+# original costs nothing and preserves the provenance path.
+protected_output = [
     "manta/{pair_id}/results/variants/candidateSV.vcf.gz",
     "manta/{pair_id}/results/variants/candidateSV.vcf.gz.tbi",
 ]
