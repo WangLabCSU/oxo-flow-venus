@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
         --mode) MODE="$2"; shift 2 ;;
         --apply) APPLY=1; shift ;;
         --no-backup) BACKUP=0; shift ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -56,7 +56,8 @@ if [ "$APPLY" = "1" ] && [ "$BACKUP" = "1" ]; then
     mkdir -p backups
     echo "== backup: deliver/ report/ ascat/ msi/ + undeclared evidence -> backups/cleanup-${STAMP}.tar.gz"
     # Belt-and-braces: deliver/*.msi.tsv and msi/reference.list are already
-    # protected, but msi/ also holds the undeclared {pair_id}_all locus detail.
+    # protected, but msi/ also holds the undeclared {pair_id}_all/_dis/_unstable
+    # side products (the whole msi/ dir is archived, so all three land in the tar).
     # The extra paths are undeclared evidence-grade side products that `clean`
     # never sees: germline/candidate Manta VCFs, scRNA per-cell results
     # (QC_Cluster.h5ad, singlecell.csv, report HTMLs) and STAR junctions.
@@ -66,7 +67,7 @@ if [ "$APPLY" = "1" ] && [ "$BACKUP" = "1" ]; then
         scrna/count/*/outs/analysis \
         scrna/count/*/outs/singlecell.csv \
         scrna/count/*/outs/*_scRNA_report.html \
-        rna/star/*/_STAR/SJ.out.tab
+        rna/star/*/*.SJ.out.tab
     du -h "backups/cleanup-${STAMP}.tar.gz"
 fi
 

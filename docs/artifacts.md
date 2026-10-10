@@ -16,7 +16,7 @@ the operator wrapper.
 | Single-cell RNA | 10 samples |
 | Chromosome scatter | 24 units per pair (Mutect2) |
 | Completed rule instances | 561 (`completed_rules` in `.oxo-flow/checkpoint.json`) |
-| Declared output files | 1,543 (sum of output patterns × instances) |
+| Declared output files | 1,553 (sum of output patterns × instances) |
 | Paired vs tumor-only | all 10 pairs matched → every tumor-only rule = 0 instances |
 
 Reproduce the counts:
@@ -38,7 +38,7 @@ EOF
 
 | Class | Meaning | Engine mechanism | Files (this cohort) |
 |---|---|---|---|
-| **A — protected** | Detection/measurement results, delivery artifacts, expensive report-facing products. Survive every clean. | `protected_output = [...]` | **583** (38%) |
+| **A — protected** | Detection/measurement results, delivery artifacts, expensive report-facing products. Survive every clean. | `protected_output = [...]` | **593** (38%) |
 | **B — temporary scratch** | Fully regenerable intermediates, only feed downstream rules. Slated for automatic post-success deletion. | `temporary = true` | **840** (54%) |
 | **C — declared, deletable** | Intermediates without either marker. Deleted by `clean`, survive normal operation. | declared `output` only | **120** (8%) |
 | **D — undeclared leftovers** | Side products the engine never tracks. `clean` cannot see them. | not declared | logs + per-tool extras |
@@ -144,7 +144,7 @@ chr-scattered pattern.
 |---|---|---|---|
 | `msisensor_scan` ×1 | `msi/reference.list` | **A** | cohort-shared microsatellite scan, 1–3 h on hg38 |
 | `msi_paired` ×10 | `deliver/{pair_id}.msi.tsv` | **A** | per-pair clinical MSI score (detection result) |
-| — | `msi/{pair_id}_all` | D | per-locus detail, undeclared side product; survives clean by accident, do not rely on it |
+| — | `msi/{pair_id}_all`, `{pair_id}_dis`, `{pair_id}_unstable` | D | msisensor side products: `_all` = per-locus detail (backs the BH correction), `_dis` = per-locus distributions (~1.1 GB/pair), `_unstable` = instability summary; undeclared, survive clean by accident |
 
 ### Signatures (`rules/signature.oxoflow`)
 
@@ -191,12 +191,14 @@ chr-scattered pattern.
 | `align/{sample}/{sample}.markdup.bai` | Picard `--CREATE_INDEX` | 20 |
 | `manta/{pair_id}/workspace/`, `results/{evidence,stats}/`, `runWorkflow.py`, `*.config.pickle`, `workflow.*.log.txt` | Manta | 10 dirs |
 | `manta/{pair_id}/results/variants/{candidateSV,candidateSmallIndels,diploidSV}.vcf.gz(.tbi)` (paired) | Manta | ~5 files/pair |
+| `vcf.raw/{pair_id}/{chr}.vcf.gz.tbi` | auto-created scatter-VCF index (undeclared) — survives `clean` | 240 |
 | `cnv/{pair_id}/GRCh38*.bed` | CNVkit inputs | ~2/pair |
-| `ascat/{pair_id}/{experiment}_normal{LogR,BAF}.txt` | ASCAT germline allele evidence (written by `run_ascat.R`) | 20 |
-| `rna/star/{sample}/_STAR/SJ.out.tab` | STAR splice-junction inventory | 10 |
+| `ascat/{pair_id}/{experiment}_normal{LogR,BAF}.txt`, `{experiment}_normalBAF_rawBAF.txt` | ASCAT germline allele evidence (written by `run_ascat.R`) | 30 |
+| `rna/star/{sample}/{sample}.SJ.out.tab` | STAR splice-junction inventory (`--outFileNamePrefix rna/star/{sample}/{sample}.`) | 10 |
+| `rna/star/{sample}/{sample}.Log.out` / `.Log.progress.out`, `{sample}._STARgenome/`, `{sample}._STARpass1/`, one interrupted-run `*.bam.oxo-failed` | STAR run logs + 1st-pass genome dirs | ~20+ |
 | `scrna/count/{sample}/outs/{anno_decon_sorted.bam(.bai), filter_matrix/, {sample}_scRNA_report.html}` | dnbc4tools | ~4/sample |
 | `scrna/count/{sample}/outs/analysis/QC_Cluster.h5ad`, `outs/singlecell.csv` | dnbc4tools per-cell results (terminal, not consumed by `scrna_qc_cluster`) | 20 |
-| `msi/{pair_id}_all` | msisensor-pro | 10 |
+| `msi/{pair_id}_all` (~20 MB), `{pair_id}_dis` (~1.1 GB each ≈ 11 GB cohort-wide), `{pair_id}_unstable` (114 B) | msisensor-pro per-pair side products (`-o msi/{pair_id}` prefix) | 10 each |
 | `logs/**` | every rule | ~560 |
 | `backups/cleanup-*.tar.gz` | `clean_intermediates.sh --apply` | per invocation |
 | `.oxo-flow/` | engine state (checkpoint, env manifests) | — engine-internal, never delete |
@@ -216,7 +218,7 @@ chr-scattered pattern.
 
 Every `output` pattern in the 13 `rules/*.oxoflow` files (40 rules) appears
 exactly once above, classified. The 561-instance census sums to the live
-`completed_rules` count, and the declared-output total (1,543) equals the sum
+`completed_rules` count, and the declared-output total (1,553) equals the sum
 of pattern × instance across the tables. D-class entries were verified against
 the live workdir (`processed-wsx`, 2026-10) rather than inferred from tool
 docs. If a rule is added, regenerate the census with the snippet at the top

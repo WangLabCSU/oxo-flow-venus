@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   protected MultiQC report (an unprotected input would silently vanish from a
   re-rendered report).
 - `docs/artifacts.md` — complete output inventory: every declared output
-  (1,543 files on the reference cohort) classified A/B/C by cleanup handling,
+  (1,553 files on the reference cohort) classified A/B/C by cleanup handling,
   per-module tables, the never-tracked (D) side-product list, and what each
   cleanup strategy (S1–S5) does to each class.
 - `clean_intermediates.sh --apply` tarball extended to capture the
@@ -47,6 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Known engine gap documented: tombstone cleanup for wildcard-rule outputs is
   not yet supported ([Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844)),
   so `temporary` cleanup is dormant until the engine fix.
+
+### Fixed
+- Output census arithmetic: the declared-output total is **1,553** (protected
+  **593**), matching the per-module tables; the headline previously
+  undercounted by 10.
+- S4 backup tarball now captures STAR junctions: the glob matched the wrong
+  path (`*_STAR/SJ.out.tab`); STAR writes
+  `rna/star/{sample}/{sample}.SJ.out.tab` because `--outFileNamePrefix`
+  embeds the sample name. Docs corrected to the real path.
+- `rules/msi.oxoflow` comment no longer suggests passing a BED to msisensor-pro:
+  its `-b` flag sets the thread count (the rule binds it to `{threads}`), so
+  `config.msi_targets_args` must stay empty; capture-restricted MSI is
+  unsupported and the only WES/panel lever is `config.msi_coverage`.
+- Inventory omissions filled: undeclared `vcf.raw/{pair_id}/{chr}.vcf.gz.tbi`
+  indexes (×240, survive `clean`), ASCAT `{experiment}_normalBAF_rawBAF.txt`
+  (30 germline-evidence files, not 20), the full msisensor trio
+  (`{pair_id}_all` / `_dis` / `_unstable`), and STAR run logs + first-pass
+  genome dirs.
+- `clean_intermediates.sh --help` no longer prints the `set -euo pipefail`
+  line (sed range trimmed).
 
 ## [0.3.0] - 2026-10-05
 

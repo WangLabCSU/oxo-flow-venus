@@ -1,6 +1,6 @@
 # Cleaning intermediates in the venus workdir
 
-The venus cohort workdir (`processed-wsx`) holds ~2.7 TB across 1543 declared
+The venus cohort workdir (`processed-wsx`) holds ~2.7 TB across 1553 declared
 for 10 CRC pairs. Two cleanup modes are supported:
 
 | Mode | Flag | Mechanism | Status |
@@ -109,9 +109,10 @@ patterns, expands wildcards, and deletes only what is not protected.
 Everything declared and unprotected: trim FASTQs (~1 TB), alignment BAMs and
 their declared indexes (`align/{sample}/{sample}.sorted.bam`,
 `.markdup.bam`, `bqsr/{sample}/*.bqsr.bam` + `.bai` +
-`.recal.table`), the `vcf.raw/` scatter chain, CNVkit scratch beyond the
-protected set, scRNA
-`raw_matrix/`. On the current
+`.recal.table`), the `vcf.raw/` scatter chain (the declared `.vcf.gz` /
+`.vcf.gz.stats` / `{chr}.tar.gz` files — but not the 240 undeclared
+`{chr}.vcf.gz.tbi` indexes, which `clean` cannot see), CNVkit scratch beyond
+the protected set, scRNA `raw_matrix/`. On the current
 cohort this is the bulk of the ~2 TB of scratch; note the undeclared leftovers
 below stay behind, so `du` will not drop by the full estimate.
 
@@ -127,7 +128,8 @@ recomputing the rest of the DAG for free.
 
 Both declared MSI products are protected: `deliver/{pair_id}.msi.tsv` (per-pair
 clinical score) and `msi/reference.list` (the cohort-shared msisensor scan,
-1–3 h on hg38). The per-pair locus detail `msi/{pair_id}_all` is an undeclared
+1–3 h on hg38). The per-pair locus detail `msi/{pair_id}_all` (with its
+`_dis`/`_unstable` siblings) is an undeclared
 side product of `msi_paired` and therefore survives a clean by accident — the
 engine never touches undeclared files, but do not rely on it. It is
 evidence-grade: the protected `report/msi_cohort.tsv` BH-corrects over the
@@ -155,10 +157,19 @@ after a clean and must be removed manually if space is critical:
 - `ascat/{pair_id}/{experiment}_normal{LogR,BAF}.txt` — germline allele
   evidence written by `run_ascat.R` (undeclared side product of the ASCAT
   step).
-- `rna/star/{sample}/_STAR/SJ.out.tab` — STAR splice-junction inventory.
-- `msi/{pair_id}_all` — per-pair msisensor locus detail (undeclared side
-  product). Evidence-grade: `report/msi_cohort.tsv` BH-corrects over its
-  per-locus counts, so archive rather than delete.
+- `rna/star/{sample}/{sample}.SJ.out.tab` — STAR splice-junction inventory
+  (`--outFileNamePrefix` embeds the sample name, so the file sits directly in
+  `rna/star/{sample}/`), plus `{sample}.Log.out`, `{sample}.Log.progress.out`
+  and the `{sample}._STARgenome/` / `{sample}._STARpass1/` dirs.
+- `msi/{pair_id}_all`, `{pair_id}_dis`, `{pair_id}_unstable` — the per-pair
+  msisensor side products (msisensor-pro writes all three under the
+  `-o msi/{pair_id}` prefix). `_all` is the per-locus detail,
+  evidence-grade: `report/msi_cohort.tsv` BH-corrects over its per-locus
+  counts, so archive rather than delete. `_dis` holds the per-locus
+  distributions (~1.1 GB per pair, ~11 GB cohort-wide — the only MSI leftover
+  worth deleting for space); `_unstable` is the 114-byte instability summary.
+  `clean_intermediates.sh --apply` archives the whole `msi/` dir, so all
+  three land in the tarball before any deletion.
 - `logs/**` — per-rule log files; `clean` never touches logs.
 - `scrna/count/{sample}/outs/` side products outside the declared list:
   `anno_decon_sorted.bam` + `.bai`, `filter_matrix/`, the per-sample

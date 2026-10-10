@@ -10,9 +10,12 @@ description = "Microsatellite instability with MSIsensor-pro (paired tumor-norma
 # cohort-shared step (~1-3 h on hg38) run once per workdir.
 #
 # The scan uses MSIsensor-pro's default microsatellite criteria; it reads the
-# reference FASTA directly (no .fai needed). For WES/panel runs restrict the
-# msi scoring to the capture region by setting config.msi_targets_args to a
-# BED, e.g. "-b /path/to/targets.bed" (passed through verbatim).
+# reference FASTA directly (no .fai needed). Capture-restricted MSI is NOT
+# supported: msisensor-pro has no BED flag — its `-b` sets the THREAD count
+# (the rule binds it to {threads}) — so `config.msi_targets_args` is reserved
+# and MUST stay empty; a BED path passed there would silently be consumed as
+# the thread count. For WES/panel runs the only lever is raising
+# `config.msi_coverage` (see README "WES/panel compatibility checklist").
 [[rules]]
 name = "msisensor_scan"
 description = "Scan reference genome for microsatellites (cohort-shared, once)"
