@@ -58,6 +58,17 @@ output = [
     "scrna/count/{sample}/outs/analysis/marker.csv",
     "scrna/count/{sample}/outs/metrics_summary.xls",
 ]
+# Keep the analysis products (h5ad, cluster/marker tables, metrics — days of
+# 16-thread/64G compute each and report inputs); leave raw_matrix (the huge
+# unfiltered matrix) unprotected so a full clean can reclaim it. Re-running
+# scrna_count is the most expensive recompute in the pipeline — treat these
+# protections as load-bearing.
+protected_output = [
+    "scrna/count/{sample}/outs/filter_feature.h5ad",
+    "scrna/count/{sample}/outs/analysis/cluster.csv",
+    "scrna/count/{sample}/outs/analysis/marker.csv",
+    "scrna/count/{sample}/outs/metrics_summary.xls",
+]
 log = "logs/scrna_count/{sample}.log"
 threads = 16
 memory = "64G"
@@ -91,6 +102,10 @@ input = [
 output = [
     "scrna/qc/{sample}.clusters.tsv",
 ]
+# Keep: report-facing per-sample QC table.
+protected_output = [
+    "scrna/qc/{sample}.clusters.tsv",
+]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -110,6 +125,8 @@ name = "scrna_integrate"
 description = "Aggregate per-sample cluster tables into cohort summary"
 expand_inputs = [{ pattern = "scrna/qc/{sample}.clusters.tsv", variables = { sample = "config.samples_scRNA" } }]
 output = ["scrna/cohort_clusters.tsv"]
+# Keep: cohort single-cell summary consumed by the report module.
+protected_output = ["scrna/cohort_clusters.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }

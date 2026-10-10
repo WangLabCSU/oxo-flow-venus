@@ -26,6 +26,18 @@ output = [
     "cnv/{pair_id}/{pair_id}.call.cns",
     "cnv/{pair_id}/{pair_id}.cnv.png",
 ]
+# Keep ALL: {pair_id}-named outputs are symlinks to the {experiment}-named
+# files, so protecting only the aliases would leave dangling links; protect
+# the full set (cheap: .cnr/.cns are small, PNGs are the report figures).
+protected_output = [
+    "cnv/{pair_id}/reference.cnn",
+    "cnv/{pair_id}/{experiment}.bqsr.cnr",
+    "cnv/{pair_id}/{experiment}.bqsr.call.cns",
+    "cnv/{pair_id}/{experiment}.bqsr-scatter.png",
+    "cnv/{pair_id}/{pair_id}.cnr",
+    "cnv/{pair_id}/{pair_id}.call.cns",
+    "cnv/{pair_id}/{pair_id}.cnv.png",
+]
 threads = 8
 memory = "32G"
 environment = { pixi = "envs/cnv/pixi.toml" }
@@ -59,6 +71,15 @@ input = [
     "{config.cnv_reference}",
 ]
 output = [
+    "cnv/{pair_id}/{experiment}.bqsr.cnr",
+    "cnv/{pair_id}/{experiment}.bqsr.call.cns",
+    "cnv/{pair_id}/{experiment}.bqsr-scatter.png",
+    "cnv/{pair_id}/{pair_id}.cnr",
+    "cnv/{pair_id}/{pair_id}.call.cns",
+    "cnv/{pair_id}/{pair_id}.cnv.png",
+]
+# Keep ALL (see cnvkit_paired note re symlink aliases).
+protected_output = [
     "cnv/{pair_id}/{experiment}.bqsr.cnr",
     "cnv/{pair_id}/{experiment}.bqsr.call.cns",
     "cnv/{pair_id}/{experiment}.bqsr-scatter.png",

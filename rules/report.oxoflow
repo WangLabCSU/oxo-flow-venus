@@ -11,6 +11,8 @@ name = "methods_from_rule_runs"
 description = "Extract methods narrative from executed rule_runs"
 input = ["config/pairs.tsv"]
 output = ["report/methods_section.md"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/methods_section.md"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -36,6 +38,8 @@ name = "tmb_per_pair"
 description = "Compute TMB per pair from delivery MAF"
 input = ["deliver/{pair_id}.maf"]
 output = ["report/tmb/{pair_id}.tmb.tsv"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/tmb/{pair_id}.tmb.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -57,6 +61,8 @@ expand_inputs = [
     { pattern = "scrna/count/{sample}/outs/metrics_summary.xls", variables = { sample = "config.samples_scRNA" } },
 ]
 output = ["report/scrna_metrics.tsv"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/scrna_metrics.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -84,6 +90,8 @@ expand_inputs = [
     { pattern = "msi/{pair_id}_all", variables = { pair_id = "config.pairs_list" } },
 ]
 output = ["report/msi_cohort.tsv"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/msi_cohort.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -115,6 +123,8 @@ expand_inputs = [
     { pattern = "report/tmb/{pair_id}.tmb.tsv", variables = { pair_id = "config.pairs_list" } },
 ]
 output = ["report/cohort_summary.tsv"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/cohort_summary.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -143,6 +153,11 @@ input = [
     "report/msi_cohort.tsv",
 ]
 output = [
+    "report/venus_clinical_report.md",
+    "report/venus_clinical_report.html",
+]
+# Keep: the final clinical deliverable.
+protected_output = [
     "report/venus_clinical_report.md",
     "report/venus_clinical_report.html",
 ]

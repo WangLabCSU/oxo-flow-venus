@@ -36,6 +36,21 @@ output = [
     "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASPCF.png",
     "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASCATprofile.pdf",
 ]
+# Keep ALL: the ASCAT fit is the single most expensive CNV step (~hours/pair,
+# 22 threads) and every product is report-facing (purity/ploidy, segments,
+# LogR/BAF tables, plots). Never scratch.
+protected_output = [
+    "ascat/{pair_id}/{pair_id}.ASCAT.rds",
+    "ascat/{pair_id}/purity_ploidy.tsv",
+    "ascat/{pair_id}/segments.tsv",
+    "ascat/{pair_id}/metrics.tsv",
+    "ascat/{pair_id}/{experiment}_tumourLogR.txt",
+    "ascat/{pair_id}/{experiment}_tumourBAF.txt",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.tumour.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.germline.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASPCF.png",
+    "ascat/{pair_id}/plots/{pair_id}.{experiment}.ASCATprofile.pdf",
+]
 threads = 22
 memory = "64G"
 environment = { pixi = "envs/ascat/pixi.toml" }
@@ -66,6 +81,8 @@ expand_inputs = [
     { pattern = "ascat/{pair_id}/purity_ploidy.tsv", variables = { pair_id = "config.pairs_list" } },
 ]
 output = ["ascat/cohort_ascat.tsv"]
+# Keep: cohort purity/ploidy table consumed by cohort_tables + clinical_report.
+protected_output = ["ascat/cohort_ascat.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }

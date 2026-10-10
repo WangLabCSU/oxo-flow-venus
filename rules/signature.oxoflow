@@ -29,6 +29,11 @@ output = [
     "report/signatures/{pair_id}.sbs96.counts.tsv",
     "report/signatures/{pair_id}.exposures.tsv",
 ]
+# Keep: signature exposures/counts are report-facing artifacts.
+protected_output = [
+    "report/signatures/{pair_id}.sbs96.counts.tsv",
+    "report/signatures/{pair_id}.exposures.tsv",
+]
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/signature/pixi.toml" }

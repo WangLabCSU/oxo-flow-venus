@@ -88,6 +88,11 @@ output = [
     "deliver/{pair_id}.sv.vcf.gz",
     "deliver/{pair_id}.sv.vcf.gz.tbi",
 ]
+# Keep: delivery SV VCF (Manta somaticSV PASS).
+protected_output = [
+    "deliver/{pair_id}.sv.vcf.gz",
+    "deliver/{pair_id}.sv.vcf.gz.tbi",
+]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -104,6 +109,11 @@ name = "sv_deliver_tumoronly"
 description = "Deliver tumor-only Manta candidateSV (unscored, no PASS filter)"
 input = ["manta/{pair_id}/results/variants/candidateSV.vcf.gz"]
 output = [
+    "deliver/{pair_id}.sv.candidate.vcf.gz",
+    "deliver/{pair_id}.sv.candidate.vcf.gz.tbi",
+]
+# Keep: delivery SV VCF (tumor-only candidateSV, unscored).
+protected_output = [
     "deliver/{pair_id}.sv.candidate.vcf.gz",
     "deliver/{pair_id}.sv.candidate.vcf.gz.tbi",
 ]

@@ -18,6 +18,15 @@ output = [
     "rna/star/{sample}/{sample}.Log.final.out",
     "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
 ]
+# Keep ONLY the small QC products (Log.final.out feeds rna_qc_summary,
+# ReadsPerGene.out.tab feeds quick counts). The big Aligned BAM is left
+# unprotected on purpose: it is the single largest beneficial-to-drop RNA
+# intermediate (regenerable from trim FASTQs; featureCounts only needs it at
+# run time).
+protected_output = [
+    "rna/star/{sample}/{sample}.Log.final.out",
+    "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
+]
 threads = 16
 memory = "64G"
 environment = { pixi = "envs/rna/pixi.toml" }
@@ -49,6 +58,11 @@ output = [
     "rna/counts/{sample}.featurecounts.txt",
     "rna/counts/{sample}.featurecounts.txt.summary",
 ]
+# Keep: count matrices are small and consumed by merge_counts.
+protected_output = [
+    "rna/counts/{sample}.featurecounts.txt",
+    "rna/counts/{sample}.featurecounts.txt.summary",
+]
 threads = 8
 memory = "16G"
 environment = { pixi = "envs/rna/pixi.toml" }
@@ -71,6 +85,8 @@ name = "merge_counts"
 description = "Merge per-sample featureCounts into cohort matrix"
 expand_inputs = [{ pattern = "rna/counts/{sample}.featurecounts.txt", variables = { sample = "config.samples_bulkRNA" } }]
 output = ["rna/counts/cohort.gene_counts.txt"]
+# Keep: cohort matrix consumed by downstream analyses outside the workflow.
+protected_output = ["rna/counts/cohort.gene_counts.txt"]
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/report/pixi.toml" }
@@ -89,6 +105,8 @@ name = "rna_qc_summary"
 description = "Summarize per-sample STAR alignment metrics"
 expand_inputs = [{ pattern = "rna/star/{sample}/{sample}.Log.final.out", variables = { sample = "config.samples_bulkRNA" } }]
 output = ["rna/qc/rna_qc_summary.tsv"]
+# Keep: report-facing QC table (cohort_tables + clinical_report).
+protected_output = ["rna/qc/rna_qc_summary.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }

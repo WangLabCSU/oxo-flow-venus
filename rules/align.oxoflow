@@ -14,6 +14,11 @@ input = [
     "qc/trim/{sample}_R2.trim.fastq.gz",
 ]
 output = ["align/{sample}/{sample}.sorted.bam"]
+# Pure scratch: mark_duplicates consumes it immediately and bqsr keeps the
+# final BAM. Sorted-BAM scratch is the second-largest reclaimable intermediate
+# (~hundreds of GB). NOTE: tombstone cleanup for wildcard rules is pending
+# engine support (see docs/cleanup.md).
+temporary = true
 log = "logs/bwa_mem2/{sample}.log"
 threads = 16
 memory = "64G"

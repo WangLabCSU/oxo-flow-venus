@@ -19,6 +19,12 @@ output = [
     "qc/trim/{sample}.fastp.json",
     "qc/trim/{sample}.fastp.html",
 ]
+# Pure scratch: trimmed FASTQs regenerate from raw/ and only feed downstream
+# rules (fastqc/bwa_mem2/star_align) plus multiqc. Marked temporary so a full
+# successful run tombstones them; ~1 TB of trim FASTQs is the largest
+# reclaimable scratch in the cohort. NOTE: tombstone cleanup for wildcard
+# rules is pending engine support (see docs/cleanup.md).
+temporary = true
 log = "logs/fastp/{sample}.log"
 threads = 8
 memory = "16G"
@@ -69,6 +75,12 @@ fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 name = "multiqc"
 description = "Aggregate all QC reports with MultiQC"
 output = [
+    "qc/multiqc/multiqc_report.html",
+    "qc/multiqc/multiqc_report_data/multiqc_general_stats.txt",
+]
+# Keep: the cohort QC report is a delivery artifact (cheap to regenerate, but
+# it is part of the report bundle).
+protected_output = [
     "qc/multiqc/multiqc_report.html",
     "qc/multiqc/multiqc_report_data/multiqc_general_stats.txt",
 ]

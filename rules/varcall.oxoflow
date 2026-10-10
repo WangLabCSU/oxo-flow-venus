@@ -33,6 +33,11 @@ output = [
     "vcf.raw/{pair_id}/{chr}.vcf.gz.stats",
     "vcf.raw/{pair_id}/{chr}.tar.gz",
 ]
+# Pure scratch: per-chunk VCFs/stats/tarballs are consumed by the merge rules
+# (gather_chr_vcfs / merge_mutect_stats / learn_orientation) and superseded by
+# the per-pair filtered VCF. NOTE: tombstone cleanup for wildcard rules is
+# pending engine support (see docs/cleanup.md).
+temporary = true
 threads = 4
 memory = "16G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -67,6 +72,8 @@ output = [
     "vcf.raw/{pair_id}/{chr}.vcf.gz.stats",
     "vcf.raw/{pair_id}/{chr}.tar.gz",
 ]
+# Pure scratch (see mutect2_paired note).
+temporary = true
 threads = 4
 memory = "16G"
 environment = { pixi = "envs/varcall/pixi.toml" }

@@ -10,6 +10,8 @@ name = "gather_chr_vcfs"
 description = "Concatenate per-chromosome Mutect2 VCFs (GATK GatherVcfs)"
 expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.vcf.gz", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.raw/{pair_id}.vcf.gz", "vcf.raw/{pair_id}.vcf.gz.tbi"]
+# Pure scratch: consumed by filter_mutect; superseded by vcf.filtered/.
+temporary = true
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -31,6 +33,8 @@ name = "merge_mutect_stats"
 description = "Merge per-chromosome Mutect2 stats (GATK MergeMutectStats)"
 expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.vcf.gz.stats", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.raw/{pair_id}.stats"]
+# Pure scratch: consumed by filter_mutect thresholding.
+temporary = true
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -51,6 +55,8 @@ name = "learn_orientation"
 description = "Learn read-orientation artifact priors from F1R2 counts"
 expand_inputs = [{ pattern = "vcf.raw/{pair_id}/{chrom}.tar.gz", variables = { chrom = "config.chromosomes" } }]
 output = ["vcf.filtered/{pair_id}.orientation-bias.tar.gz"]
+# Pure scratch: consumed by filter_mutect as artifact priors.
+temporary = true
 threads = 2
 memory = "8G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -79,6 +85,9 @@ output = [
     "vcf.filtered/{pair_id}.vcf.gz.tbi",
     "vcf.filtered/{pair_id}.vcf.gz.filteringStats.tsv",
 ]
+# Pure scratch: superseded by deliver/{pair_id}.somatic.pass.vcf.gz
+# (select_pass). Regenerable from the raw VCF chain without re-aligning.
+temporary = true
 threads = 2
 memory = "16G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -100,6 +109,12 @@ name = "select_pass"
 description = "Keep FILTER=PASS variants into delivery VCF"
 input = ["vcf.filtered/{pair_id}.vcf.gz", "{config.genome_fa}"]
 output = [
+    "deliver/{pair_id}.somatic.pass.vcf.gz",
+    "deliver/{pair_id}.somatic.pass.vcf.gz.tbi",
+]
+# Keep: clinical delivery VCF — the primary somatic-call artifact consumed by
+# annotation/report and external partners.
+protected_output = [
     "deliver/{pair_id}.somatic.pass.vcf.gz",
     "deliver/{pair_id}.somatic.pass.vcf.gz.tbi",
 ]

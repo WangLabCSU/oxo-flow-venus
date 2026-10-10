@@ -19,6 +19,11 @@ output = [
     "deliver/{pair_id}.somatic.pass.vep.vcf.gz",
     "deliver/{pair_id}.somatic.pass.vep.vcf.gz.tbi",
 ]
+# Keep: annotated delivery VCF (re-annotation with vep-rs costs ~hours/pair).
+protected_output = [
+    "deliver/{pair_id}.somatic.pass.vep.vcf.gz",
+    "deliver/{pair_id}.somatic.pass.vep.vcf.gz.tbi",
+]
 threads = 4
 memory = "16G"
 environment = { pixi = "envs/varcall/pixi.toml" }
@@ -53,6 +58,11 @@ name = "vcf2maf"
 description = "Convert annotated VCF to MAF format"
 input = ["deliver/{pair_id}.somatic.pass.vep.vcf.gz"]
 output = [
+    "deliver/{pair_id}.maf",
+]
+# Keep: delivery MAF consumed by TMB + SBS96 signature fitting and external
+# tooling.
+protected_output = [
     "deliver/{pair_id}.maf",
 ]
 threads = 2

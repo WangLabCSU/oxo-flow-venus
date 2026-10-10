@@ -76,7 +76,8 @@ venus.oxoflow        # main workflow: config + include list + chromosome scatter
 rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation,
                      #   cnv, sv, msi, signature, rna, scrna, report)
 scripts/             # python helpers (MAF conversion, TMB, SBS96 fit, cohort tables,
-                     #   clinical report, …)
+                     #   clinical report, …) + clean_intermediates.sh (disk cleanup)
+docs/                # method rationale, reference data, cleanup guide
 envs/<mod>/pixi.toml # pixi environments, one dir per module (env specs in rules point here)
 resources/           # vendored data tables (COSMIC v3.1 SBS96 GRCh38 signature matrix)
 config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-only)
@@ -135,6 +136,26 @@ manifests and checkpoint fingerprints to **workdir-resolved paths**, so:
   `oxo-flow dry-run venus.oxoflow` reports the exact stale/skip/completed
   split before anything runs (the `Summary: N rules` line, by contrast,
   counts total graph instances, not stale ones).
+
+## Cleaning intermediates
+
+Rule definitions carry two cleanup markers (see [docs/cleanup.md](docs/cleanup.md)):
+
+- `temporary = true` on pure-scratch rules (trim FASTQs, per-chunk VCFs, …) —
+  once the engine supports wildcard cleanup, a fully successful run reclaims
+  them automatically;
+- `protected_output = [...]` on delivery/report/ASCAT/CNV/RNA-count/scRNA rules —
+  these artifacts survive `oxo-flow clean`.
+
+```bash
+scripts/clean_intermediates.sh                    # preview what a full clean deletes
+scripts/clean_intermediates.sh --mode all --apply # backup deliver/report/ascat/msi, then clean
+```
+
+Note the trade-off: `clean` deletes files but not checkpoint bookkeeping, so a
+later `oxo-flow run` lazily regenerates only what downstream rules need. MSI
+products are currently unprotected (`rules/msi.oxoflow` is frozen); the script
+backs them up before deleting (1–3 h/pair to recompute).
 
 ## Requirements
 
