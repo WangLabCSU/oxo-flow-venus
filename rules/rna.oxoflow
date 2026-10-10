@@ -23,6 +23,11 @@ output = [
 # the archive-grade RNA product (junction discovery / IGV / re-counting
 # without re-alignment) and costs only ~31 GB cohort-wide — cheap insurance
 # next to the days-scale DNA realignment a loss would piggyback on.
+# The read-group platform comes from config.read_group_platform (same key the
+# DNA-side bwa_mem2 params use), so DNA and RNA BAMs always agree. NOTE: the
+# engine fingerprints the shell template, so editing this rule stales the
+# completed star_align instances even when the rendered command is unchanged —
+# sync the workdir only together with a planned re-run window.
 protected_output = [
     "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
     "rna/star/{sample}/{sample}.Log.final.out",
@@ -42,7 +47,7 @@ STAR \
     --twopassMode Basic \
     --outSAMtype BAM SortedByCoordinate \
     --quantMode GeneCounts \
-    --outSAMattrRGline ID:{sample} SM:{sample} PL:BGI \
+    --outSAMattrRGline ID:{sample} SM:{sample} PL:{config.read_group_platform} \
     2> logs/rna_star/{sample}.log
 """
 
