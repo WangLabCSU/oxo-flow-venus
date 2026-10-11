@@ -17,7 +17,19 @@ Two categories exist by design:
    (`/home/data/reference/`); every entry includes the rebuild/re-download
    command so another site can reconstruct them.
 
-Host reference root: `/home/data/reference/`
+Host reference root: `/home/data/reference/`. Since 2026-10-11 every asset
+below lives physically under this single shared root. Two config strings still
+carry historical locations outside it (`scrna_reference`/`scrna_bin` under
+`/home/data/data-resource/dnbc4tools`, `ascat_refdir` under
+`/home/data/wsx/hnzl_data/refdata/ascat`); those paths are now **compat
+symlinks** into the root. The strings stay byte-identical on purpose — rule
+commands embed them, so changing them would stale every fingerprint that
+touches the affected references. Flip the strings to the physical paths only
+with a deliberate staleness review. Verify the whole set on the host with:
+
+```bash
+scripts/verify_refdata.sh    # from the repo root, on the reference host
+```
 
 | Asset | Config key(s) | Version | Origin |
 |---|---|---|---|
@@ -103,16 +115,21 @@ each with `.tbi`:
 
 ## 6. dnbc4tools single-cell reference — `ref-Homo_sapiens`
 
-- **Path:** `/home/data/data-resource/dnbc4tools/ref-Homo_sapiens/` (35 GB;
-  sibling `dnbc4tools3.0/` holds the binary — config keys `scrna_reference` /
-  `scrna_bin`. This is a **shared-data root outside `/home/data/reference/`**;
-  verified on the host 2026-10-11.)
+- **Path (physical):** `/home/data/reference/dnbc4tools/ref-Homo_sapiens/`
+  (35 GB; sibling `/home/data/reference/dnbc4tools/dnbc4tools3.0/` holds the
+  binary — config keys `scrna_reference` / `scrna_bin`). The config strings
+  still read `/home/data/data-resource/dnbc4tools/...` and resolve through the
+  compat symlink
+  `/home/data/data-resource/dnbc4tools -> /home/data/reference/dnbc4tools`
+  (layout unified 2026-10-11; see the note at the top of this page).
 - **Origin:** BGI **vendor bundle** shipped with dnbc4tools 3.0 for DNBelab
   C-series chemistry (prebuilt genomeDir + whitelists). Vendor-matched
   chemistry data cannot be reconstructed generically; use the bundle the
   vendor distributes for the exact kit version.
 - **Verify:** `dnbc4tools` validates the reference at startup and reports its
-  identity in the count log.
+  identity in the count log; `scripts/verify_refdata.sh` checks the directory
+  is non-empty and the binary executable *through the configured string*, so
+  a broken symlink is caught before a run starts.
 
 ## 7. CNVkit tumor-only reference — configured, NOT deployed on this host
 
@@ -130,15 +147,19 @@ each with `.tbi`:
 
 ## 8. ASCAT G1000 hg38 WGS reference set (Zenodo 14008443)
 
-- **Path:** `/home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs/` (config
-  key `ascat_refdir`)
+- **Path (physical):** `/home/data/reference/ascat/v3.2-hg38-wgs/` (config
+  key `ascat_refdir`; the configured string
+  `/home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs` resolves through the
+  compat symlink
+  `/home/data/wsx/hnzl_data/refdata/ascat -> /home/data/reference/ascat`,
+  layout unified 2026-10-11 — see the note at the top of this page).
 - **Origin:** official VanLoo-lab ASCAT NGS references,
   `https://zenodo.org/records/14008443` — allele/loci files for
   alleleCounter, GC-content and replication-timing tables for logR
   correction (see docs/method-rationale.md §13).
 - **Download + verify (automated):**
   ```bash
-  scripts/download_ascat_refdata.sh -o /home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs
+  scripts/download_ascat_refdata.sh -o /home/data/reference/ascat/v3.2-hg38-wgs
   # flaky link: add -r (resume loop); verification is identical either way
   ```
   The script size-checks and md5-checks all four zips (`refdata/ascat_hg38_wgs.md5`)
@@ -147,6 +168,19 @@ each with `.tbi`:
   chr1–X so chr22 presence is asserted). Note the zips ship inner files named
   `GC_G1000_hg38.txt` / `RT_G1000_hg38.txt` — the script copies them to the
   `*_WGS_hg38.txt` names that `rules/ascat.oxoflow` passes via `--gc`/`--rt`.
+- **Two naming generations coexist on disk** (verified 2026-10-11): the
+  pipeline consumes the **plain-numbered** set
+  (`G1000_alleles_hg38_1..22.txt`, `G1000_loci_hg38_1..22.txt`) —
+  `run_ascat.R` probes `..._1.txt` first and only falls back to the
+  chr-prefixed names if plain is absent. A chr-prefixed copy
+  (`G1000_alleles_hg38_chr1..22,X.txt`) is also present and harmless. Filenames
+  stay plain because ASCAT's `readAlleleFiles` recovers the chromosome from
+  the filename, while file **content** (and the BAM contigs it is matched
+  against) is chr-prefixed. `scripts/verify_refdata.sh` gates on the plain
+  set and reports the fallback set informationally.
+- **Verify after any move/re-download:** `scripts/verify_refdata.sh` re-runs
+  the table validation (22+22 plain files, 18-field GC/RT rows, RT chr22
+  sentinel) without re-downloading.
 - **Known failure mode (do not repeat):** a *resumed* download that appended
   ~12 MB of garbage once passed a naive size glance and killed ASCAT with
   `Stopped early on line 1813274. Expected 18 fields but found 51`. Never
@@ -170,6 +204,11 @@ Its provenance is therefore exactly §1's FASTA — nothing to download.
    record the exact URL/version here.
 2. Write/extend a download script under `scripts/` with size+md5 gates
    (pattern: `scripts/download_ascat_refdata.sh`); verify before extraction.
-3. Point the `venus.oxoflow` config key at the deployed path.
+3. Deploy under the canonical root `/home/data/reference/` (or add a compat
+   symlink if the config string must stay put) and point the `venus.oxoflow`
+   config key at the deployed path.
 4. Confirm the rule environment has the reader tool (e.g. `unzip`, `bcftools`).
-5. Update the table at the top of this page.
+5. Run `scripts/verify_refdata.sh` on the host — extend its checks if the new
+   asset has its own structure to validate (file counts, table shapes,
+   md5-known artifacts).
+6. Update the table at the top of this page.

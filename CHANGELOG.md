@@ -59,6 +59,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completed instance goes stale. Census: 693 protected / 840 temporary /
   20 declared-deletable (only `markdup.bam`) of 1,553; a full mode-B clean
   reclaims ≈1.7 TB.
+- `scripts/verify_refdata.sh` — host-side one-shot verification of every
+  reference path declared in `venus.oxoflow` [config]: genome FASTA + BWA-MEM2
+  index, STAR index + `genomeParameters.txt`, GENCODE GTF, GATK resources
+  (+`.tbi`), vep-rs binary + cache `info.json`, dnbc4tools reference/binary,
+  CNVkit reference (WARN-only, refdata.md §7), and the full ASCAT table
+  contract (22 plain alleles + 22 loci, 18-field GC/RT rows, RT chr22
+  sentinel) re-validated without re-downloading. Resolves and reports compat
+  symlinks, so a broken link into the canonical root fails the check before a
+  run starts.
+
+### Changed
+- Reference layout unified on the host (2026-10-11): all assets physically
+  live under the canonical root `/home/data/reference/` — the dnbc4tools
+  bundle (35 GB) moved from `/home/data/data-resource/` and the ASCAT set
+  (1.8 GB) from `/home/data/wsx/hnzl_data/refdata/` via same-filesystem
+  moves, with compat symlinks left at the old locations. Config strings are
+  deliberately unchanged (rule commands embed them; changing them would
+  stale every fingerprint touching those references), so
+  `scrna_reference`/`scrna_bin`/`ascat_refdir` now resolve through symlinks —
+  documented in `docs/refdata.md` and checked by `scripts/verify_refdata.sh`.
 
 ### Fixed
 - Output census arithmetic: the declared-output total is **1,553** (protected
