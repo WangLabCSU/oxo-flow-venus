@@ -103,7 +103,10 @@ each with `.tbi`:
 
 ## 6. dnbc4tools single-cell reference — `ref-Homo_sapiens`
 
-- **Path:** `/home/data/reference/dnbc4tools/ref-Homo_sapiens/`
+- **Path:** `/home/data/data-resource/dnbc4tools/ref-Homo_sapiens/` (35 GB;
+  sibling `dnbc4tools3.0/` holds the binary — config keys `scrna_reference` /
+  `scrna_bin`. This is a **shared-data root outside `/home/data/reference/`**;
+  verified on the host 2026-10-11.)
 - **Origin:** BGI **vendor bundle** shipped with dnbc4tools 3.0 for DNBelab
   C-series chemistry (prebuilt genomeDir + whitelists). Vendor-matched
   chemistry data cannot be reconstructed generically; use the bundle the
