@@ -6,9 +6,9 @@
 #                 (engine `oxo-flow clean --force`). Delivery/report/ASCAT/CNV/
 #                 MSI products are protected in rules/*.oxoflow and survive.
 #   --mode useless  clean only "useless" scratch (engine temporary=true
-#                 tombstones). NOT USABLE YET: tombstone cleanup silently
-#                 skips wildcard-rule outputs on current oxo-flow engines
-#                 (all venus scratch rules use {wildcard} outputs). This
+#                 tombstones). LIVE on the cleanup-fixed engine (oxo-flow
+#                 commit a456c796, PR #845); older engines silently keep
+#                 {wildcard} scratch (use --mode all there instead). This
 #                 script refuses to rm manually — manual deletion without
 #                 checkpoint tombstones breaks incremental bookkeeping.
 #
@@ -41,9 +41,10 @@ command -v oxo-flow >/dev/null || {
 if [ "$MODE" = "useless" ]; then
     cat <<'EOF'
 --mode useless relies on engine `temporary = true` tombstone cleanup, which
-currently SILENTLY NO-OPS for wildcard rules (every venus scratch rule has
-{wildcard} outputs). Tracked upstream (Traitome/oxo-flow#844); until it lands, use `--mode all` to
-reclaim scratch (delivery/report/ASCAT/CNV products stay protected), or wait.
+requires the cleanup-fixed engine (oxo-flow commit a456c796, PR #845). Older
+engines SILENTLY NO-OP for wildcard rules (every venus scratch rule has
+{wildcard} outputs). If scratch survives the run, use `--mode all` to
+reclaim it (delivery/report/ASCAT/CNV products stay protected).
 
 Nothing was deleted.
 EOF

@@ -31,6 +31,19 @@ sample_groups_file = "config/groups.tsv"
 [defaults]
 shell_prelude = "set -euo pipefail"
 
+# Disk-pressure guard (engine PR #845; requires oxo-flow with #843/#844 —
+# commit a456c796 or later, not yet in a release tag). The workdir lives on
+# the shared /home/data volume, so the floor protects the volume, not just
+# this run:
+#   - free < 5T  ("Reclaim"): completed rules' temporary outputs are
+#     tombstoned and unlinked mid-run — protected_output and leaf outputs
+#     are never touched.
+#   - free < 2T  ("Hold"): new dispatches withheld while in-flight rules
+#     finish; sustained Hold aborts with a checkpoint for `oxo-flow resume`.
+[engine]
+min_free_disk = "2T"
+reclaim_free_disk = "5T"
+
 # ---------------------------------------------------------------------------
 # Config — override any key at runtime with `oxo-flow run --arg KEY=VALUE`.
 # All paths below are ABSOLUTE on the analysis server; the workflow itself is

@@ -9,7 +9,7 @@ supported:
 
 | Mode | Flag | Mechanism | Status |
 |------|------|-----------|--------|
-| **A — "useless" scratch only** | `--mode useless` | engine `temporary = true` tombstones | **blocked on engine fix** (see below) |
+| **A — "useless" scratch only** | `--mode useless` | engine `temporary = true` tombstones | **live on engine ≥ a456c796** (see below) |
 | **B — everything not protected** | `--mode all` | engine `oxo-flow clean` + `protected_output` | **works today** |
 
 Both go through `scripts/clean_intermediates.sh`. The script never deletes
@@ -41,25 +41,25 @@ full filtered VCFs (`vcf.filtered/{pair_id}.vcf.gz`) are **not** in this
 table on purpose: they are the only copy of the filtered-out variant records
 (see Mode B below), so `filter_mutect` is protected instead of temporary.
 
-These carry `temporary = true` in their rule definitions. Once the engine
-fix lands, a fully successful run tombstones them automatically (delete after
-success, lazy-regenerate on demand via the tombstone cascade). Leaf rules and
-protected outputs are never touched.
+These carry `temporary = true` in their rule definitions. On an engine with
+the cleanup fixes (oxo-flow commit `a456c796`, PR [#845](https://github.com/Traitome/oxo-flow/pull/845)
+— fixes #843/#844; not yet in a release tag), a fully successful run tombstones
+them automatically (delete after success, lazy-regenerate on demand via the
+tombstone cascade) — wildcard outputs included. Leaf rules and protected
+outputs are never touched.
 
-**Known engine limitation (2026-10):** tombstone cleanup silently skips every
-rule whose outputs contain `{wildcard}` placeholders — no deletion, no
-tombstone, no diagnostic. All seven venus scratch rules are wildcard rules, so
-mode A is currently a no-op. Do NOT work around this with manual `rm`: deleting
-outputs without checkpoint bookkeeping marks the producers stale and would
-trigger recomputation of the completed campaign on the next `oxo-flow run`.
-Tracked upstream as [Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844);
-until it lands use `--mode all` to reclaim the same scratch (see below).
-The engine's disk-pressure auto-reclaim
-([#843](https://github.com/Traitome/oxo-flow/issues/843)) respects
-`protected_output` as well, and its current fail-safe also declines to reclaim
-wildcard-fan-out scratch rules — so venus scratch is not auto-reclaimed from
-under you by that path either, and the protections above hold across clean,
-reclaim, and (future) tombstone.
+**Engine disk-pressure guard (armed via `[engine]` in venus.oxoflow):** when
+free space on the workdir volume crosses `reclaim_free_disk` (5T) mid-run, the
+same tombstone machinery unlinks completed scratch while the run continues
+(`⊘ reclaimed temporary outputs of '<rule>' …`); below `min_free_disk` (2T)
+new dispatches are held and a sustained hold aborts with a checkpoint for
+`oxo-flow resume`. `protected_output` is respected by every rung of that
+ladder. One upstream limitation remains: mid-run reclaim still skips
+`output_pattern` fan-out producers ([#846](https://github.com/Traitome/oxo-flow/issues/846))
+— venus declares no `output_pattern` rules, so venus scratch is reclaimable
+on both paths. Do NOT work around cleanup with manual `rm`: deleting outputs
+without checkpoint bookkeeping marks the producers stale and would trigger
+recomputation on the next `oxo-flow run`.
 
 ## Mode B — one-click clean of all intermediates (`protected_output` + `clean`)
 

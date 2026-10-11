@@ -47,7 +47,7 @@ EOF
 
 | Strategy | A protected | B temporary | C deletable | D undeclared |
 |---|---|---|---|---|
-| **S1** Auto-tombstone after successful run (Mode A) | keep | delete *(dormant — pending engine [#844](https://github.com/Traitome/oxo-flow/issues/844))* | keep | keep |
+| **S1** Auto-tombstone after successful run (Mode A) | keep | delete *(live on engine ≥ `a456c796`, PR [#845](https://github.com/Traitome/oxo-flow/pull/845))* | keep | keep |
 | **S2** `oxo-flow clean` (dry-run) | nothing deleted, preview only | | | |
 | **S3** `oxo-flow clean --force` (Mode B) | keep | delete | delete | keep |
 | **S4** `scripts/clean_intermediates.sh --mode all --apply` | keep (tar backup of `deliver/ report/ ascat/ msi/` first) | delete | delete | keep (tar additionally captures the remaining D-class evidence: Manta variant VCFs, scRNA per-cell results, STAR junctions, MSI `_dis` distributions) |
@@ -55,12 +55,13 @@ EOF
 
 Notes:
 
-- **Mode A is dormant**: the engine's tombstone loop silently skips every rule
-  whose outputs contain `{wildcard}` placeholders ([#844](https://github.com/Traitome/oxo-flow/issues/844)).
-  All seven B-class venus rules are wildcard rules, so today only S3/S4
-  reclaim scratch. Never work around this with manual `rm` — deleting declared
-  outputs without checkpoint bookkeeping makes producers stale and would
-  trigger recomputation on the next `oxo-flow run`.
+- **Mode A requires the cleanup-fixed engine**: oxo-flow commit `a456c796`
+  (PR [#845](https://github.com/Traitome/oxo-flow/pull/845)) fixed the tombstone
+  loop's wildcard skip ([#844](https://github.com/Traitome/oxo-flow/issues/844));
+  on an older engine the seven B-class venus scratch rules are silently kept,
+  and only S3/S4 reclaim scratch. Never work around this with manual `rm` —
+  deleting declared outputs without checkpoint bookkeeping makes producers
+  stale and would trigger recomputation on the next `oxo-flow run`.
 - **S5 on an A-class file is a real loss**: regenerating it re-runs the rule
   *and all ancestors* (e.g. any `deliver/` VCF → full BWA-MEM2 realignment,
   days of compute). Treat the A column as load-bearing.
