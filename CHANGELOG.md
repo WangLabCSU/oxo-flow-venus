@@ -44,9 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/cleanup.md` — what each mode keeps/deletes, the recompute-on-demand
   trade-off, the MSI caveat, and undeclared leftovers (`markdup.bai`, manta
   workspaces, CNVkit BEDs, dnbc4tools side products).
-- Known engine gap documented: tombstone cleanup for wildcard-rule outputs is
-  not yet supported ([Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844)),
-  so `temporary` cleanup is dormant until the engine fix.
+- Disk-pressure guard armed: `[engine]` section in `venus.oxoflow`
+  (`min_free_disk = "2T"`, `reclaim_free_disk = "5T"`) — under disk pressure
+  the engine tombstones completed temporary outputs mid-run, holds new
+  dispatches below the floor, and aborts with a checkpoint as a last resort
+  (oxo-flow PR [#845](https://github.com/Traitome/oxo-flow/pull/845); requires
+  engine commit `a456c796` or later, not yet in a release tag).
+- `temporary = true` tombstone cleanup is live: the engine gap that silently
+  skipped wildcard-rule outputs ([Traitome/oxo-flow#844](https://github.com/Traitome/oxo-flow/issues/844))
+  is fixed in the same engine PR, so the seven scratch rules (fastp, bwa_mem2,
+  mutect2 scatter/merge chain) are cleaned automatically at run completion.
+  `docs/cleanup.md` mode A status updated accordingly.
 - Third protection wave (archive-grade intermediates): BQSR analysis-ready
   BAMs + indexes + recal tables (`bqsr/{sample}/{sample}.bqsr.bam`/`.bai`/
   `.recal.table`, ~1 TB cohort-wide), STAR aligned BAMs (~31 GB), scRNA
