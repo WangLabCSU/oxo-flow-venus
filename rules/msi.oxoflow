@@ -60,11 +60,26 @@ threads = 4
 memory = "8G"
 environment = { pixi = "envs/msi/pixi.toml" }
 when = "wildcard.control != ''"
+# msisensor-pro `msi` writes per-base scratch files (literally named A, C,
+# G, T) into its CURRENT WORKING DIRECTORY. Run from the workdir root those
+# undeclared files land at the workdir root, where the engine never manages
+# them — and with several instances running concurrently (-j > 1) they would
+# all write to the SAME four paths. Run each instance in its own scratch
+# directory instead: everything the tool follows CWD for stays isolated,
+# while the declared outputs (-o …_all/_unstable/_dis and the delivered TSV)
+# keep their workdir-relative locations. Scratch is wiped before the run
+# (deterministic retries) and after success; it is deliberately kept on
+# failure for forensics. The subshell confines the `cd`.
 shell = """
 mkdir -p deliver logs && \
-msisensor-pro msi -d {input[0]} -t {input[1]} -n {input[2]} \
-    -o msi/{pair_id} -c {config.msi_coverage} -b {threads} \
-    {config.msi_targets_args} \
+wd=$PWD && rm -rf msi_scratch/{pair_id} && mkdir -p msi_scratch/{pair_id} && \
+( cd msi_scratch/{pair_id} && \
+  msisensor-pro msi -d "$wd/msi/reference.list" \
+      -t "$wd/bqsr/{experiment}/{experiment}.bqsr.bam" \
+      -n "$wd/bqsr/{control}/{control}.bqsr.bam" \
+      -o "$wd/msi/{pair_id}" -c {config.msi_coverage} -b {threads} \
+      {config.msi_targets_args} ) \
     > logs/msisensor_{pair_id}.log 2>&1 && \
+rm -rf msi_scratch/{pair_id} && \
 mv msi/{pair_id} deliver/{pair_id}.msi.tsv
 """
