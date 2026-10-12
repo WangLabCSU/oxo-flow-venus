@@ -6,10 +6,19 @@ description = "Cohort-level clinical report: methods from actual rule_runs, per-
 # report describes the commands that ACTUALLY executed (methods = ground truth).
 # The checkpoint lives in .oxo-flow/ (engine-owned, not a rule product): the
 # shell reads it at execution time, so it is not declared as rule input.
+# `report/cohort_summary.tsv` is declared as a REAL input dependency: it is the
+# join point of the analytical chain (TMB / RNA-QC / scRNA / ASCAT / MSI), so
+# this rule is scheduled at the END of the run, when the checkpoint is fully
+# populated. With only `config/pairs.tsv` as input the rule fired seconds
+# after launch, read an empty checkpoint and emitted an empty methods
+# section (#5).
 [[rules]]
 name = "methods_from_rule_runs"
 description = "Extract methods narrative from executed rule_runs"
-input = ["config/pairs.tsv"]
+input = [
+    "config/pairs.tsv",
+    "report/cohort_summary.tsv",
+]
 output = ["report/methods_section.md"]
 # Keep: report module outputs are the clinical deliverables.
 protected_output = ["report/methods_section.md"]
