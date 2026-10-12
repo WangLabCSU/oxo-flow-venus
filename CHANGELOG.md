@@ -89,6 +89,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   documented in `docs/refdata.md` and checked by `scripts/verify_refdata.sh`.
 
 ### Fixed
+- MultiQC aggregation no longer silently drops QC sources (regression of the
+  issue-#9 scan whitelist): the shell now also scans `align/` (Picard
+  duplicate metrics, 20 WGS samples) and `scrna/fastqc/` (raw scRNA FastQC,
+  10 samples), and `expand_inputs` mirrors every scanned root — Picard
+  dup metrics over DNA, scRNA FastQC over scRNA, STAR `Log.final.out` +
+  `ReadsPerGene.out.tab` and featureCounts `.summary` over bulkRNA — so the
+  engine schedules multiqc only after each source exists instead of letting
+  the protected report freeze without those sections
+  ([#9](https://github.com/WangLabCSU/oxo-flow-venus/issues/9)).
 - `star_align` no longer hardcodes the read-group platform: the SAM `PL` tag
   now comes from `config.read_group_platform` (the same key the DNA-side
   `bwa_mem2` params use, default `"BGI"`), so DNA and RNA BAM headers always

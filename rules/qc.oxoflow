@@ -78,16 +78,22 @@ mkdir -p qc/fastqc logs/fastqc && \
 fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 """
 
-# Cohort-wide MultiQC aggregation over fastp + fastqc + STAR + featurecounts.
-# Declared {sample}-wildcard inputs would duplicate the expand_inputs entries,
-# so only the expansions are declared; the shell scans the four QC output
-# roots explicitly. A whole-workdir scan (`multiqc .`) is forbidden here: the
-# engine's pixi envs live inside the workdir (envs/<group>/.pixi/envs/…), and
-# a recursive scan misparses env files whose names match module patterns —
-# e.g. samtools-flagstat.1 (a roff man page) was parsed as a flagstat report
-# (venus issue #9). Expanded over DNA + bulkRNA groups (config.samples_<group>
-# keys are auto-injected from groups.tsv): scRNA samples have no fastp/fastqc
-# outputs.
+# Cohort-wide MultiQC aggregation over fastp, fastqc (DNA + bulkRNA + scRNA),
+# Picard duplicate metrics, STAR and featureCounts. MultiQC matches files by
+# CONTENT, not filename — the issue #9 junk row came from a roff man page
+# (samtools-flagstat.1) whose text embeds a flagstat summary — so the fix is
+# a whitelist of QC output roots, not a filename filter: the shell scans
+# qc/trim qc/fastqc scrna/fastqc align rna/star rna/counts. A whole-workdir
+# scan (`multiqc .`) stays forbidden: the engine's pixi envs live inside the
+# workdir (envs/<group>/.pixi/envs/…), and a recursive sweep re-parses those
+# env files. expand_inputs mirrors every scanned root (config.samples_<group>
+# keys are auto-injected from groups.tsv) so the engine schedules multiqc only
+# after each source exists — without this the protected report would freeze
+# missing STAR/featureCounts sections if it ran before the RNA rules. Note:
+# fastqc writes HTML and ZIP side by side and MultiQC ingests the ZIP, so the
+# declared *_fastqc.html inputs act as presence anchors while the sibling
+# ZIPs are what actually get parsed. Variant-level bcftools stats are
+# intentionally not scanned — this report stays read-level QC.
 [[rules]]
 name = "multiqc"
 description = "Aggregate all QC reports with MultiQC"
@@ -108,6 +114,12 @@ expand_inputs = [
     { pattern = "qc/fastqc/{sample}_R1.trim_fastqc.html", variables = { sample = "config.samples_bulkRNA" } },
     { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_DNA" } },
     { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_bulkRNA" } },
+    { pattern = "align/{sample}/{sample}.dup_metrics.txt", variables = { sample = "config.samples_DNA" } },
+    { pattern = "scrna/fastqc/{sample}_SC_R1_fastqc.html", variables = { sample = "config.samples_scRNA" } },
+    { pattern = "scrna/fastqc/{sample}_SC_R2_fastqc.html", variables = { sample = "config.samples_scRNA" } },
+    { pattern = "rna/star/{sample}/{sample}.Log.final.out", variables = { sample = "config.samples_bulkRNA" } },
+    { pattern = "rna/star/{sample}/{sample}.ReadsPerGene.out.tab", variables = { sample = "config.samples_bulkRNA" } },
+    { pattern = "rna/counts/{sample}.featurecounts.txt.summary", variables = { sample = "config.samples_bulkRNA" } },
 ]
 log = "logs/multiqc.log"
 threads = 4
@@ -115,6 +127,6 @@ memory = "8G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/multiqc logs && \
-multiqc qc/trim qc/fastqc rna/star rna/counts \
-  --filename multiqc_report --outdir qc/multiqc --force --ignore "*_STARtmp*" 2> {log}
+multiqc qc/trim qc/fastqc scrna/fastqc align rna/star rna/counts \
+  --filename multiqc_report --outdir qc/multiqc --force 2> {log}
 """
