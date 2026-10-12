@@ -79,8 +79,9 @@ fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 """
 
 # Cohort-wide MultiQC aggregation over fastp, fastqc (DNA + bulkRNA + scRNA),
-# Picard duplicate metrics, STAR and featureCounts. MultiQC matches files by
-# CONTENT, not filename — the issue #9 junk row came from a roff man page
+# Picard duplicate metrics, STAR and featureCounts. Most MultiQC modules match
+# by filename pattern, but the samtools/flagstat and picard matchers fingerprint
+# file CONTENT — the issue #9 junk row came from a roff man page
 # (samtools-flagstat.1) whose text embeds a flagstat summary — so the fix is
 # a whitelist of QC output roots, not a filename filter: the shell scans
 # qc/trim qc/fastqc scrna/fastqc align rna/star rna/counts. A whole-workdir
