@@ -78,11 +78,16 @@ mkdir -p qc/fastqc logs/fastqc && \
 fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 """
 
-# Cohort-wide MultiQC aggregation over fastp + fastqc outputs.
+# Cohort-wide MultiQC aggregation over fastp + fastqc + STAR + featurecounts.
 # Declared {sample}-wildcard inputs would duplicate the expand_inputs entries,
-# so only the expansions are declared; the shell scans the workdir directly.
-# Expanded over DNA + bulkRNA groups (config.samples_<group> keys are
-# auto-injected from groups.tsv): scRNA samples have no fastp/fastqc outputs.
+# so only the expansions are declared; the shell scans the four QC output
+# roots explicitly. A whole-workdir scan (`multiqc .`) is forbidden here: the
+# engine's pixi envs live inside the workdir (envs/<group>/.pixi/envs/…), and
+# a recursive scan misparses env files whose names match module patterns —
+# e.g. samtools-flagstat.1 (a roff man page) was parsed as a flagstat report
+# (venus issue #9). Expanded over DNA + bulkRNA groups (config.samples_<group>
+# keys are auto-injected from groups.tsv): scRNA samples have no fastp/fastqc
+# outputs.
 [[rules]]
 name = "multiqc"
 description = "Aggregate all QC reports with MultiQC"
@@ -110,5 +115,6 @@ memory = "8G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/multiqc logs && \
-multiqc . --filename multiqc_report --outdir qc/multiqc --force --ignore "*_STARtmp*" 2> {log}
+multiqc qc/trim qc/fastqc rna/star rna/counts \
+  --filename multiqc_report --outdir qc/multiqc --force --ignore "*_STARtmp*" 2> {log}
 """
