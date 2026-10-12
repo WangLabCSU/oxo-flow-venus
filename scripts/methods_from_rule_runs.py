@@ -125,10 +125,26 @@ def load_manifest(
     except (OSError, tomllib.TOMLDecodeError, StopIteration, KeyError):
         include_paths = []
     if not include_paths:
-        include_paths = sorted(p.name for p in rules_dir.glob("*.oxoflow"))
-    for rel in include_paths:
-        p = rules_dir / Path(rel).name
+        # No usable [[include]] list: fall back to scanning the rules dir
+        # (legacy workdir layout where rule files are copied under rules/).
+        candidates = sorted(rules_dir.glob("*.oxoflow"))
+    else:
+        # Mirror the engine's [[include]] semantics: absolute paths pass
+        # through verbatim, relative paths resolve against the workflow
+        # file's OWN directory. Rewriting every include to
+        # `rules_dir/<basename>` silently skipped all includes in
+        # include-based workdirs (rule files live in the reference repo,
+        # not under rules/), yielding an empty manifest and an empty
+        # methods section (#5).
+        wf_dir = workflow.parent
+        candidates = []
+        for rel in include_paths:
+            p = Path(rel)
+            candidates.append(p if p.is_absolute() else wf_dir / p)
+    for p in candidates:
         if not p.is_file():
+            print(f"[methods] WARNING: include target not found: {p}",
+                  file=sys.stderr)
             continue
         try:
             data = tomllib.loads(p.read_text())
@@ -154,6 +170,18 @@ def main() -> int:
     cp = json.loads(Path(args.checkpoint).read_text())
     rule_runs: dict = cp.get("rule_runs", {})
     manifest = load_manifest(Path(args.rules_dir), Path(args.workflow))
+    if not manifest:
+        # An empty manifest means the workflow definition was not resolved at
+        # all — the section would be silently wrong (a methods section that
+        # describes nothing, in a clinical deliverable). Fail loudly instead.
+        print(
+            "[methods_from_rule_runs] FATAL: resolved 0 rules from the "
+            f"workflow manifest (workflow={args.workflow}, "
+            f"rules-dir={args.rules_dir}); refusing to write an empty "
+            "methods section. Check [[include]] paths and file existence.",
+            file=sys.stderr,
+        )
+        return 2
 
     lines: list[str] = ["## Methods (generated from actual pipeline execution)", ""]
     n_rules = sum(len(v) for v in manifest.values())
