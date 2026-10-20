@@ -138,6 +138,22 @@ chromosomes = [
 # Base-recalibration: "true"/"false" (string; tested with when = comparisons)
 run_bqsr = "true"
 
+# Cohort mode flag for report gating: "true" = tumor-only cohort (no pair in
+# config/pairs.tsv has a control). String flag (same convention as run_bqsr —
+# when-comparisons compare strings). In a tumor-only cohort the paired-only
+# rules (ascat_paired, msi_paired, cnvkit_paired) are not instantiated, and
+# their cohort consumers are redirected to tumor-only companions that share
+# output paths with complementary when-gates:
+#   ascat_cohort (tumor_only != 'true')  <->  ascat_cohort_tumoronly (== 'true')
+#   msi_cohort   (tumor_only != 'true')  <->  msi_cohort_tumoronly (== 'true')
+# Default "false" (paired cohort) keeps existing runs unchanged; tumor-only
+# runs pass --arg tumor_only=true. A MIXED cohort (some pairs with a control,
+# some without) is NOT resolved by this flag — the paired cohort rules'
+# expand_inputs fan-out over config.pairs_list still references unproducible
+# per-pair inputs for the tumor-only pairs (engine limitation: no injected
+# list of paired-only pairs; documented in README "Tumor-only cohorts").
+tumor_only = "false"
+
 # ---------------------------------------------------------------------------
 # Chromosome scatter values
 # ---------------------------------------------------------------------------

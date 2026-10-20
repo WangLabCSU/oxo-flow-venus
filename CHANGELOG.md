@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tumor-only cohort gating for the report chain: new `[config]` flag
+  `tumor_only` (string, default `"false"`; set with `--arg tumor_only=true`).
+  `ascat_cohort` / `msi_cohort` carry `when = "config.tumor_only != 'true'"`,
+  and companion rules `ascat_cohort_tumoronly` / `msi_cohort_tumoronly` share
+  their output paths (`ascat/cohort_ascat.tsv`, `report/msi_cohort.tsv`) with
+  the complementary gate, writing header-only tables (column names mirror
+  `run_ascat.R` / `collect_msi.py` exactly). Without this, a tumor-only
+  cohort could not finish: `ascat_paired` / `msi_paired` are never
+  instantiated (per-pair `wildcard.control` gating), so the cohort rules'
+  expanded inputs were unproducible and `cohort_tables` /
+  `clinical_report` / `methods_from_rule_runs` all failed. Mixed cohorts
+  (paired + tumor-only pairs in one run) remain unsupported for the ASCAT/MSI
+  aggregations — documented in README.
+- `docs/method-rationale.md`: why ASCAT/MSI are paired-only, and the
+  header-only-companion gating pattern.
+### Added
 - Intermediate-file cleanup support: pure-scratch rules (fastp, bwa_mem2,
   mutect2 scatter/merge chain) carry `temporary = true`; delivery, report,
   ASCAT, CNVkit, RNA-count, scRNA-analysis and QC-report rules declare

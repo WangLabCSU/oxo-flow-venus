@@ -74,6 +74,19 @@ Rscript {input[2]} \
 # Concatenate the per-pair purity/ploidy tables into one cohort table for
 # the report module (clinical_report / cohort_summary consume it). Uses the
 # report environment because it only needs Python.
+#
+# Tumor-only gating: ascat_paired carries when = "wildcard.control != ''", so
+# in a tumor-only cohort NO instance of ascat_paired is instantiated and the
+# expanded input ascat/{pair_id}/purity_ploidy.tsv is unproducible — without a
+# matching when-gate this rule fails on every run (and, with keep-going,
+# retries pointlessly and blocks cohort_tables). Gate it off when the cohort
+# is declared tumor-only (config.tumor_only, venus.oxoflow — same string-flag
+# convention as run_bqsr); the companion rule ascat_cohort_tumoronly then
+# writes the header-only table that keeps the report chain alive. A MIXED
+# cohort (some pairs with a control, some without) still fails here on the
+# pairs that have no purity_ploidy.tsv — collect_ascat.py tolerates missing
+# files, but the expand_inputs fan-out itself does not; see README
+# "Tumor-only cohorts".
 [[rules]]
 name = "ascat_cohort"
 description = "Concatenate per-pair ASCAT purity/ploidy into cohort table"
@@ -86,10 +99,37 @@ protected_output = ["ascat/cohort_ascat.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
+when = "config.tumor_only != 'true'"
 shell = """
 mkdir -p ascat logs && \
 python {config.venus_tools}/collect_ascat.py \
     --inputs {input} \
     --output {output[0]} \
     2> logs/ascat_cohort.log
+"""
+
+# Tumor-only companion of ascat_cohort: same output path, complementary
+# when-gate (the cnvkit_paired/cnvkit_tumoronly shared-output-path pattern).
+# ASCAT is paired-only (the allelic fit needs a matched normal), so a
+# tumor-only cohort has no purity_ploidy.tsv to collect; the header-only
+# table keeps cohort_tables / clinical_report / methods_from_rule_runs live
+# and the report renders the ASCAT section as "no data" (tsv_markdown).
+# Column names mirror run_ascat.R's purity_ploidy data.frame exactly.
+[[rules]]
+name = "ascat_cohort_tumoronly"
+description = "Write header-only ASCAT cohort table (tumor-only cohort)"
+input = []
+output = ["ascat/cohort_ascat.tsv"]
+# Keep: same shared output path as ascat_cohort — report-facing.
+protected_output = ["ascat/cohort_ascat.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+when = "config.tumor_only == 'true'"
+shell = """
+mkdir -p ascat logs && \
+printf 'pair\tsample\tpurity\tploidy\tpsi\taberrant_cell_fraction\tgoodness_of_fit\tnon_aberrant\tfailed\tn_segments\n' \
+    > ascat/cohort_ascat.tsv && \
+printf '[ascat_cohort_tumoronly] tumor-only cohort: header-only table (ASCAT needs a matched normal)\n' \
+    > logs/ascat_cohort.log
 """

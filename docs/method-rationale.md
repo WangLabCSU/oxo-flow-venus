@@ -309,6 +309,32 @@ and convention-dependence.
 call in the report carries its cutoff and requires orthogonal clinical
 confirmation as noted inline.
 
+### Tumor-only cohorts: paired-only analyses and report gating
+
+ASCAT (§13) and MSIsensor (§9) are **paired-only analyses**: ASCAT's allelic
+fit needs the matched normal to separate germline from somatic allele
+ratios, and MSIsensor's baseline is built from the normal's length
+distributions (a panel-of-normals baseline cannot be built from a single
+tumor-only cohort). In a tumor-only cohort (declared with
+`--arg tumor_only=true`) the per-pair rules (`ascat_paired`, `msi_paired`)
+are never instantiated — their `when = "wildcard.control != ''"` gate skips
+every instance — so the cohort aggregations would reference unproducible
+inputs and fail, taking `cohort_tables` and `clinical_report` down with
+them.
+
+The pipeline handles this with a **header-only companion** pattern
+(`ascat_cohort_tumoronly`, `msi_cohort_tumoronly`): the companion rules share
+the output paths (`ascat/cohort_ascat.tsv`, `report/msi_cohort.tsv`) with
+complementary `when` gates on `config.tumor_only` (the same
+shared-output-path pattern as `cnvkit_paired` / `cnvkit_tumoronly`), and
+write just the header row. Downstream rules keep their hard inputs, and the
+report renders the ASCAT/MSI sections as "no data" — honest output (the
+analyses genuinely did not run) instead of a broken run. Mixed cohorts
+(some pairs paired, some tumor-only) are not resolved by this flag: the
+aggregations fan out over `config.pairs_list` and still reference the
+tumor-only pairs' unproducible inputs; engine support for a paired-only
+pair list is tracked separately.
+
 ---
 
 ## Reference list
