@@ -104,12 +104,48 @@ protected_output = ["report/msi_cohort.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
+# Tumor-only gating: msi_paired carries when = "wildcard.control != ''", so
+# in a tumor-only cohort its deliver/{pair_id}.msi.tsv and msi/{pair_id}_all
+# inputs are unproducible and this rule fails on every run. Gate it off when
+# the cohort is declared tumor-only (config.tumor_only, venus.oxoflow); the
+# companion rule msi_cohort_tumoronly then writes the header-only table that
+# keeps cohort_tables alive. A MIXED cohort (some pairs with a control, some
+# without) still fails here on the tumor-only pairs — see README
+# "Tumor-only cohorts".
+when = "config.tumor_only != 'true'"
 shell = """
 mkdir -p report logs && \
 python {config.venus_tools}/collect_msi.py \
     --inputs {input} \
     --output {output[0]} \
     2> logs/msi_cohort.log
+"""
+
+# Tumor-only companion of msi_cohort: same output path, complementary
+# when-gate (the cnvkit_paired/cnvkit_tumoronly shared-output-path pattern).
+# MSIsensor-pro needs a matched normal both for calling and for the baseline
+# (a PoN cannot be built from one tumor-only cohort — see rules/msi.oxoflow),
+# so a tumor-only cohort has no .msi.tsv / _all inputs to collect; the
+# header-only table keeps cohort_tables / clinical_report alive and the
+# report renders the MSI section as "no data" (tsv_markdown). Column names
+# mirror collect_msi.py's output header exactly.
+[[rules]]
+name = "msi_cohort_tumoronly"
+description = "Write header-only MSI cohort table (tumor-only cohort)"
+input = []
+output = ["report/msi_cohort.tsv"]
+# Keep: same shared output path as msi_cohort — report-facing.
+protected_output = ["report/msi_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+when = "config.tumor_only == 'true'"
+shell = """
+mkdir -p report logs && \
+printf 'sample\traw_total_sites\tsummary_total_sites\treported_unstable\treported_pct\tbh_unstable\tbh_pct\tunstable_delta\tuint16_saturated\tmsi_status_wgs\tmsi_status_wes\n' \
+    > report/msi_cohort.tsv && \
+printf '[msi_cohort_tumoronly] tumor-only cohort: header-only table (MSI needs a matched normal)\n' \
+    > logs/msi_cohort.log
 """
 
 # Aggregate TMB + RNA QC + single-cell metrics + ASCAT + MSI into one

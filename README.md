@@ -21,6 +21,8 @@
 Analysis modes:
 - **Paired tumor–normal** (`pairs.tsv` with a control sample) — Mutect2 tumor/normal, CNVkit `--normal`.
 - **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes.
+- **Tumor-only cohort** (every pair has an empty control) — set `--arg tumor_only=true`. The paired-only cohort rules then redirect to header-only tumor-only companions sharing their output paths: `ascat_cohort` → `ascat_cohort_tumoronly`, `msi_cohort` → `msi_cohort_tumoronly` (ASCAT and MSIsensor-pro are paired-only analyses; the report renders their sections as "no data"). Without the flag the cohort rules fail on unproducible per-pair inputs (ascat_paired / msi_paired are never instantiated).
+- **Mixed cohort caveat** — some pairs with a control, some without: per-pair rules self-gate via `wildcard.control`, but the cohort aggregations (`ascat_cohort`, `msi_cohort`) fan out over `config.pairs_list` and still reference the unproducible per-pair inputs of the tumor-only pairs. There is no injected list of paired-only pairs to expand over (engine limitation), so a mixed cohort currently requires running the paired and tumor-only chains as separate cohorts or waiting on engine support for paired-only pair lists.
 - **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel, plus `mutect_target_args`, `cnv_method`, `cnv_targets_args`, `sv_exome_args`, and `tmb_target_args` per the checklist below; leave empty for WGS.
 
 ## Groups and assay gating
@@ -101,6 +103,12 @@ A module is one rule fragment plus one environment; nothing else changes:
      analyses in `report/<mod>/{pair_id}.<ext>`; run logs go to `logs/`;
    - gate paired-only rules with `when = "wildcard.control != ''"` so a
      tumor-only pair simply skips the instance instead of failing;
+   - gate COHORT rules that aggregate paired-only products with
+     `when = "config.tumor_only != 'true'"`, and add a tumor-only companion
+     rule sharing the same output path with the complementary gate
+     `when = "config.tumor_only == 'true'"` (see `ascat_cohort` /
+     `ascat_cohort_tumoronly` in `rules/ascat.oxoflow`) so downstream
+     consumers keep a hard input to resolve;
    - tunables live as `[config]` keys in `venus.oxoflow` (overridable at run
      time with `--arg KEY=VALUE`), not as literals inside rules.
 3. **Wire it up**: `[[include]] path = "rules/<mod>.oxoflow"` in `venus.oxoflow`
