@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aggregations — documented in README.
 - `docs/method-rationale.md`: why ASCAT/MSI are paired-only, and the
   header-only-companion gating pattern.
+### Changed
+- `mutect2_tumoronly` now consumes `config.pon` (`--panel-of-normals`), same
+  as `mutect2_paired` — tumor-only calls previously skipped PoN filtering
+  entirely. Default stays the bundled 1000G panel; override with a cohort
+  PoN via `--arg pon=...`.
 ### Added
 - Intermediate-file cleanup support: pure-scratch rules (fastp, bwa_mem2,
   mutect2 scatter/merge chain) carry `temporary = true`; delivery, report,
