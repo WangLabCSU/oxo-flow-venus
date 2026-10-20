@@ -66,6 +66,7 @@ input = [
     "{config.genome_fa}",
     "{config.genome_dict}",
     "{config.gnomad}",
+    "{config.pon}",
 ]
 output = [
     "vcf.raw/{pair_id}/{chr}.vcf.gz",
@@ -86,6 +87,7 @@ gatk --java-options "-Xmx{effective_memory_mb}m" Mutect2 \
     -L {chr} \
     {config.mutect_target_args} \
     --germline-resource {input[4]} \
+    --panel-of-normals {input[5]} \
     --f1r2-tar-gz vcf.raw/{pair_id}/{chr}.tar.gz \
     -O {output[0]} \
     2> logs/mutect2_{pair_id}_{chr}.log
