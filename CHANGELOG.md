@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-21
+
 ### Added
 - Tumor-only cohort gating for the report chain: new `[config]` flag
   `tumor_only` (string, default `"false"`; set with `--arg tumor_only=true`).
