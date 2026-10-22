@@ -145,6 +145,31 @@ each with `.tbi`:
   ```
 - **Verify:** `test -s "$cnv_reference"` before enabling any tumor-only CNV rule.
 
+- **Gene annotation (`cnv_annotate_args`):** reference `.cnn` files built
+  without `--annotate` carry an empty gene column (`-`), and `cnvkit batch`
+  against such a reference propagates the gap to every `.cnr/.cns` — report
+  tables then need coordinate fallbacks to name a locus (seen on GC01 with
+  ERBB2). The fix is asymmetric (verified against cnvkit 0.9.14: `batch
+  --reference` **hard-rejects** `--annotate/-n/-t/-a/...` as
+  reference-construction flags):
+  1. **Paired mode** — the reference is built per-run by `cnvkit_paired`, so
+     set `cnv_annotate_args = --annotate <gene.bed>` and the flag flows into
+     the batch call that constructs the reference; the annotated `.cnn` then
+     names every `.cnr/.cns` bin it produces.
+  2. **Tumor-only mode** — the reference is a prebuilt external `.cnn`, and
+     batch cannot re-annotate it. Gene names come solely from that file's
+     gene column (extracted regions → target bed → coverage → fix keep it).
+     So annotate the reference itself: either rebuild it with
+     `cnvkit.py reference ... --annotate <gene.bed>`, or re-annotate the
+     existing file in place with
+     `scripts/annotate_cnv_reference.py <ref.cnn> <gene.bed> [-o out.cnn]`
+     (same `into_ranges` call cnvkit's own `target --annotate` uses; verified
+     bin-for-bin identical output, ERBB2 bins named on the chr17 test slice).
+     Do NOT pass `cnv_annotate_args` in tumor-only runs — the batch call
+     would exit with a flag-conflict error.
+  Adding the flag (or swapping in an annotated reference) changes rule
+  fingerprints, so fold the switch into a planned rerun window.
+
 ## 8. ASCAT G1000 hg38 WGS reference set (Zenodo 14008443)
 
 - **Path (physical):** `/home/data/reference/ascat/v3.2-hg38-wgs/` (config

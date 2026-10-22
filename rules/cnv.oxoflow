@@ -8,7 +8,13 @@ description = "Somatic copy-number calling with CNVkit (paired and tumor-only)"
 # WES/panel capture). WGS mode: no --targets; CNVkit bins the whole genome.
 # For WES/panel runs also set config.cnv_targets_args = "--targets /path/to/
 # targets.bed" and leave cnv_targets unset in inputs (passed through as an
-# argument fragment).
+# argument fragment). config.cnv_annotate_args names bins with a gene model
+# (e.g. "--annotate /path/gene.bed"); empty "" keeps CNVkit's default naming.
+# NOTE the asymmetry (cnvkit >=0.9 rejects reference-construction flags
+# alongside --reference): --annotate is only valid where a reference is being
+# BUILT (cnvkit_paired, or building the tumor-only reference itself) —
+# cnvkit_tumoronly gets its gene names from the configured .cnn's gene column
+# (re-annotate an existing one with scripts/annotate_cnv_reference.py).
 [[rules]]
 name = "cnvkit_paired"
 description = "CNVkit batch with matched normal"
@@ -49,6 +55,7 @@ cnvkit.py batch {input[0]} \
     --fasta {input[2]} \
     --method {config.cnv_method} \
     {config.cnv_targets_args} \
+    {config.cnv_annotate_args} \
     --output-reference cnv/{pair_id}/reference.cnn \
     --output-dir cnv/{pair_id} \
     --diagram --scatter \

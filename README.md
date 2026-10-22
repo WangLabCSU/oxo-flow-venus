@@ -126,6 +126,7 @@ WGS is the default; a WES/panel run needs these config keys set:
 | `mutect_target_args` | e.g. `-L /path/regions.bed` — restricts Mutect2 to the capture targets |
 | `cnv_method` | `hybrid` for WES/panel capture (default `wgs`) |
 | `cnv_targets_args` | e.g. `--targets /path/regions.bed` for CNVkit |
+| `cnv_annotate_args` | optional, paired mode (reference-building) only: e.g. `--annotate /path/gene.bed` so the built reference `.cnn` and downstream `.cnr/.cns` carry gene names (default "" = gene column "-"). In tumor-only mode batch rejects it (cnvkit ≥0.9 flag conflict) — annotate the reference `.cnn` itself with `scripts/annotate_cnv_reference.py` instead |
 | `sv_exome_args` | set `--exome` so Manta's off-target depth filters keep real WES events |
 | `tmb_target_args` | e.g. `--target-bed /path/regions.bed` so `all_somatic_mut_per_mb` uses merged capture Mb (the clinical `tmb_mut_per_mb` uses coding Mb for both WGS and WES) |
 | `msi_coverage` | `20` for WES depth floors — capture-restricted MSI is NOT supported (msisensor-pro has no BED flag) |
