@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CNVkit gene annotation support, new `[config]` key `cnv_annotate_args`
+  (default `""`): names bins with a gene model, e.g.
+  `--annotate /path/gene.bed`, so the built reference `.cnn` and downstream
+  `.cnn/.cnr/.cns` carry gene names instead of `-`. Valid in **paired mode
+  only** (`cnvkit_paired`, where the reference is built): cnvkit ≥0.9 hard-
+  rejects `--annotate` (and `-n/-t/-a`) alongside `--reference`, so
+  `cnvkit_tumoronly` deliberately does not pass it — tumor-only gene naming
+  comes from the reference `.cnn`'s own gene column.
+- `scripts/annotate_cnv_reference.py`: re-annotate the gene column of an
+  existing reference `.cnn` from a BED4 gene model without rebuilding the
+  reference (numeric columns untouched; output verified bin-for-bin against
+  `cnvkit.py target --annotate`, ERBB2 bins named on the chr17 test slice,
+  end-to-end `batch --reference` run confirmed named `.cnr`/`.cns`).
+- `docs/refdata.md` §7: two-level fix description (paired flag vs tumor-only
+  reference re-annotation) with the cnvkit 0.9.14 flag-conflict evidence.
+
+### Fixed
+- Issue #17 (empty gene column in CNVkit outputs): root cause is the
+  reference `.cnn` being built without `--annotate`; the gene column flows
+  reference → target bed → coverage → fix → `.cnr/.cns` unchanged, so
+  annotating the reference is both necessary and sufficient for tumor-only
+  naming.
+
 ## [0.4.0] - 2026-10-21
 
 ### Added

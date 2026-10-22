@@ -103,6 +103,13 @@ cnv_method = "wgs"
 # --targets /path/to/regions.bed (passed through verbatim to cnvkit batch).
 cnv_reference = "/home/data/reference/cnvkit_reference/hg38.wgs.reference.cnn"
 cnv_targets_args = ""
+# CNVkit gene model for bin naming (gene column of .cnn/.cnr/.cns). Empty ""
+# leaves gene = "-"; set e.g. --annotate /path/gencode_v47.gene.bed so report
+# tables show gene names without coordinate fallbacks. Only valid where a
+# reference is BUILT (paired mode / reference build): cnvkit batch --reference
+# rejects it. Tumor-only naming comes from the reference .cnn gene column —
+# re-annotate that file with scripts/annotate_cnv_reference.py.
+cnv_annotate_args = ""
 # ASCAT (allelic CNV) reference: G1000 loci/alleles + GC/RT correction
 # (VanLoo-lab Zenodo record 14008443, WGS hg38 set).
 ascat_refdir = "/home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs"
