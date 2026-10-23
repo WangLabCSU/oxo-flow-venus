@@ -46,6 +46,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference re-annotation) with the cnvkit 0.9.14 flag-conflict evidence.
 
 ### Fixed
+- Issue #21 (clinical report fidelity — four defects verified against the
+  GC01 tumor-only workdir): `methods_from_rule_runs.py` attributed
+  checkpoint records by bare rule name and missed every per-instance key
+  (`<rule>_<instance>`), rendering 33/44 rules as "rotated out of the
+  checkpoint window" with empty commands; attribution now walks manifest
+  rule names longest-first (so `ascat_cohort_tumoronly` is never
+  mis-attributed to `ascat_cohort`), per-instance rules report instance
+  counts plus a representative verbatim command, and records with no key
+  are labelled "no checkpoint record (rotated out or not instantiated)"
+  instead of a false "✓ success". `tool_name`/`citation_for` unwrap
+  `pixi run ... bash -c '<script>'` and resolve the inner tool (previously
+  "mkdir"/"pixi"); `AmpliconSuite-pipeline.py` joins TOOL_META.
+  `clinical_report.py` no longer narrates foreign cohorts: the MSI
+  uint16/cutoff notes are derived from THIS cohort's table rows (saturated
+  and MSI-H samples called out from data) and render an honest "not run"
+  line for header-only tables; the ASCAT interpretation drops the
+  hardcoded colorectal-recurrence guidance (tumour-type content belongs in
+  cohort notes) and the section renders "not run" when the table is
+  empty. The versions-mining loop skips non-dict checkpoint entries
+  instead of crashing. Verified with a 16-check fixture suite (both cohort
+  modes) plus a full regeneration from the real GC01 checkpoint (rotated
+  rows 33 -> 7, all remaining absent for the right reason).
 - Issue #17 (empty gene column in CNVkit outputs): root cause is the
   reference `.cnn` being built without `--annotate`; the gene column flows
   reference → target bed → coverage → fix → `.cnr/.cns` unchanged, so

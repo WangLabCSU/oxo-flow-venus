@@ -208,19 +208,27 @@ ASCAT_METHODS = (
     "logR GC-content and replication-timing correction with the official "
     "G1000 references, ASPCF segmentation (penalty 70) and the purity/ploidy "
     "grid fit with gamma = 1 (the HTS value; 0.55 is the SNP-array legacy). "
-    "Autosomes 1:22 only — patient sex is unannotated for this cohort, so "
-    "X/Y are excluded from the fit. Per-module selection rationale: "
-    "`docs/method-rationale.md` in the pipeline repository.\n"
+    "Autosomes 1:22 only — sex chromosomes are excluded from the fit. "
+    "Per-module selection rationale: `docs/method-rationale.md` in the "
+    "pipeline repository.\n"
 )
 
+ASCAT_NOT_RUN = (
+    "_ASCAT: not run in this cohort — ASCAT infers purity/ploidy from a "
+    "matched tumor/normal pair, which a tumor-only cohort does not provide._\n"
+)
+
+# Tumour-type-specific recurrence expectations (e.g. CRC 20q-gain/18q-loss)
+# belong in the cohort notes (notes/interpretation.md), not here — this
+# narrative previously hardcoded colorectal guidance into every cohort's
+# report.
 ASCAT_INTERP = (
-    "Interpretation guidance: colorectal cancers are typically aneuploid "
-    "(CIN phenotype) with recurrent arm-level events — gains of 20q/13q/7 "
-    "and losses of 18q/17p (TP53); low-purity fits (<30%) have reduced "
+    "Interpretation guidance: low-purity fits (<30%) have reduced "
     "sensitivity for subclonal events, and a goodness-of-fit below ~0.80 "
-    "flags a less reliable purity/ploidy solution. Segment tables "
-    "(`ascat/<pair>/segments.tsv`) and per-sample plots accompany this "
-    "report.\n"
+    "flags a less reliable purity/ploidy solution; arm-level recurrence "
+    "expectations are tumour-type-specific and should be read against the "
+    "cohort notes. Segment tables (`ascat/<pair>/segments.tsv`) and "
+    "per-sample plots accompany this report.\n"
 )
 
 MSI_HEADER = (
@@ -230,27 +238,50 @@ MSI_HEADER = (
     "the raw per-site output.\n"
 )
 
-MSI_UINT16_NOTE = (
-    "**Known MSIsensor counting bug, corrected here:** MSIsensor v1.3.0 "
-    "stores each site's rank in a uint16 while computing FDR, so above "
-    "65,535 sites the rank wraps and the reported unstable-site count "
-    "saturates (visible as exactly 65,535 = 2^16-1). Recomputing a proper "
-    "BH FDR from the raw per-site table fixes this: for **Pt09** the "
-    "reported 65,535 sites (10.54%) is an artifact — the BH-corrected count "
-    "is **102,316 unstable sites (16.46%)**, which *strengthens* the MSI-H "
-    "call. For the other nine pairs reported and recomputed counts agree "
-    "exactly (one pair differs by a single borderline site at q ≈ 0.05).\n"
+MSI_NOT_RUN = (
+    "_MSI: not run in this cohort — MSIsensor requires a matched-normal "
+    "baseline, which a tumor-only cohort does not provide "
+    "(see README \"Tumor-only cohorts\")._\n"
 )
 
-MSI_CUTOFF_NOTE = (
-    "**Cutoffs are convention-dependent:** the 3.5% threshold is the WGS-era "
-    "msisensor convention (Niu et al. 2014, *Sci Rep*); WES/panel practice "
-    "commonly uses ≥15% (msisensor-pro and clinical assays). Only Pt09 "
-    "exceeds both thresholds (MSI-H); all other pairs are MSS under either "
-    "convention, consistent with the TMB/indel-fraction analysis above. "
-    "Clinical use requires orthogonal confirmation (MMR immunohistochemistry "
-    "or MLH1 promoter methylation).\n"
-)
+
+def msi_notes(rows: list[dict[str, str]]) -> str:
+    """MSI narrative derived from THIS cohort's table rows (the earlier
+    hardcoded Pt09/ten-pair narrative leaked another cohort's findings into
+    every report, including tumor-only cohorts with no MSI data at all)."""
+    sat = sorted({r.get("sample", "") for r in rows
+                  if str(r.get("uint16_saturated", "")).lower() == "true"})
+    parts = [
+        "**Known MSIsensor counting bug, corrected here:** MSIsensor v1.3.0 "
+        "stores each site's rank in a uint16 while computing FDR, so above "
+        "65,535 sites the rank wraps and the reported unstable-site count "
+        "saturates (visible as exactly 65,535 = 2^16-1). The BH "
+        "recomputation shown in this table is authoritative. "
+        + (
+            f"Reported counts hit the saturation ceiling for: "
+            f"**{', '.join(sat)}** — their BH-corrected counts supersede "
+            f"the reported values.\n" if sat else
+            "No sample in this cohort reached the saturation ceiling.\n"
+        )
+    ]
+    msih = sorted({r.get("sample", "") for r in rows
+                   if r.get("msi_status_wgs") == "MSI-H"
+                   or r.get("msi_status_wes") == "MSI-H"})
+    parts.append(
+        "**Cutoffs are convention-dependent:** the 3.5% threshold is the "
+        "WGS-era msisensor convention (Niu et al. 2014, *Sci Rep*); "
+        "WES/panel practice commonly uses ≥15% (msisensor-pro and clinical "
+        "assays). "
+        + (
+            f"Samples flagged MSI-H under either convention: "
+            f"**{', '.join(msih)}** (see per-sample status columns).\n"
+            if msih else
+            "No sample exceeds either threshold in this cohort.\n"
+        )
+        + "Clinical use requires orthogonal confirmation (MMR "
+          "immunohistochemistry or MLH1 promoter methylation).\n"
+    )
+    return "\n".join(parts)
 
 # ecDNA reconstruction: AmpliconSuite-pipeline (CNVkit seed intervals ->
 # AmpliconArchitect -> AmpliconClassifier), GRCh38, --AA_solver clarabel.
@@ -305,13 +336,16 @@ def main() -> int:
 
     if args.ascat:
         parts.append("## Tumor purity, ploidy and allele-specific copy number (ASCAT)\n")
-        parts.append(ASCAT_METHODS)
-        parts.append(tsv_markdown(
-            args.ascat, title="ASCAT fit summary",
-            only=["sample", "purity", "ploidy", "psi",
-                  "aberrant_cell_fraction", "goodness_of_fit",
-                  "n_segments", "non_aberrant", "failed"]))
-        parts.append(ASCAT_INTERP)
+        if read_tsv(args.ascat):
+            parts.append(ASCAT_METHODS)
+            parts.append(tsv_markdown(
+                args.ascat, title="ASCAT fit summary",
+                only=["sample", "purity", "ploidy", "psi",
+                      "aberrant_cell_fraction", "goodness_of_fit",
+                      "n_segments", "non_aberrant", "failed"]))
+            parts.append(ASCAT_INTERP)
+        else:
+            parts.append(ASCAT_NOT_RUN)
 
     if args.ecdna:
         parts.append("## ecDNA / focal amplification (AmpliconSuite)\n")
@@ -322,14 +356,17 @@ def main() -> int:
 
     if args.msi:
         parts.append("## Microsatellite instability (MSI)\n")
-        parts.append(MSI_HEADER)
-        parts.append(tsv_markdown(
-            args.msi, title="MSI summary (reported vs BH-corrected)",
-            only=["sample", "summary_total_sites", "reported_unstable",
-                  "reported_pct", "bh_unstable", "bh_pct",
-                  "uint16_saturated", "msi_status_wgs", "msi_status_wes"]))
-        parts.append(MSI_UINT16_NOTE)
-        parts.append(MSI_CUTOFF_NOTE)
+        rows = read_tsv(args.msi)
+        if not rows:
+            parts.append(MSI_NOT_RUN)
+        else:
+            parts.append(MSI_HEADER)
+            parts.append(tsv_markdown(
+                args.msi, title="MSI summary (reported vs BH-corrected)",
+                only=["sample", "summary_total_sites", "reported_unstable",
+                      "reported_pct", "bh_unstable", "bh_pct",
+                      "uint16_saturated", "msi_status_wgs", "msi_status_wes"]))
+            parts.append(msi_notes(rows))
 
     if args.notes and Path(args.notes).exists():
         parts.append("### Cohort-specific findings\n")
