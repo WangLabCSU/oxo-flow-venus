@@ -93,10 +93,13 @@ def unwrap_bash_c(cmd: str) -> str | None:
     """Inner script of a `pixi run --manifest-path X bash -c '<script>'` wrapper.
 
     Engine-recorded commands are pixi-wrapped; the analytical tool identity
-    lives inside the -c payload, not in the wrapper tokens.
+    lives inside the -c payload, not in the wrapper tokens. The shell prelude
+    (`set -euo pipefail`) is stripped so the first token is a real command.
     """
     m = re.search(r"\bbash\s+-c\s+'(.*)'", cmd, re.S)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    return re.sub(r"^\s*set\s+-[euo\w]+\s+pipefail\s*", "", m.group(1))
 
 
 def _meta_scan(cmd: str) -> tuple[str, str] | None:
@@ -110,11 +113,19 @@ def _meta_scan(cmd: str) -> tuple[str, str] | None:
 
 def _scripts_tool(cmd: str) -> str:
     base = Path(first_word(cmd)).name
+    scan = [t for t in cmd.split()[1:] if not t.startswith("-")]
     if base in INTERPRETERS:  # python3 script.py -> script tool identity
-        for tok in cmd.split()[1:]:
+        for tok in scan:
             b = Path(tok).name
-            if b.endswith((".py", ".R")) and not b.startswith("-"):
+            if b.endswith((".py", ".R")):
                 return b
+    # Multi-statement inner scripts (post bash -c unwrap): the first command
+    # may be mkdir/export housekeeping while the analytical identity is a
+    # later script token — scan for it before falling back to the base.
+    for tok in scan:
+        b = Path(tok).name
+        if b.endswith((".py", ".R")):
+            return b
     return base
 
 
