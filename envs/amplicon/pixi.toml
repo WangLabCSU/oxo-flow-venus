@@ -7,3 +7,13 @@ platforms = ["linux-64"]
 ampliconsuite = ">=1.6"
 clarabel = ">=0.11.1,<0.12"
 pip = "*"
+
+# mosek is a PyPI-only package (no conda feedstock): ampliconarchitectlib
+# does a module-level `import mosek` at import time. Declaring it here keeps
+# the env in sync with pixi.lock — installing it at rule runtime with
+# `pip install` mutated the env after lock, and the engine's env fingerprint
+# then flagged the rule as changed on EVERY subsequent run (perpetual
+# self-invalidation, observed 2026-10-23 on the GC01 workdir). No license is
+# needed to import; --AA_solver clarabel avoids any runtime license.
+[pypi-dependencies]
+mosek = "*"

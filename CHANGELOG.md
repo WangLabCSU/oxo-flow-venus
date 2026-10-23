@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference re-annotation) with the cnvkit 0.9.14 flag-conflict evidence.
 
 ### Fixed
+- Issue #23 (ampliconsuite perpetual self-invalidation): the rule
+  pip-installed mosek into its own pixi env at rule runtime, mutating the
+  env away from the committed pixi.lock; the engine's env fingerprint then
+  reported "rule definition changed" and re-invalidated ampliconsuite and
+  its entire downstream chain on every subsequent run (observed: 661s +
+  266GB-peak re-run plus 4 report-chain re-runs per invocation, plus a
+  per-run PyPI network dependency). mosek is now declared under
+  `[pypi-dependencies]` in `envs/amplicon/pixi.toml` (pixi resolves it
+  into pixi.lock; no license needed to import, `--AA_solver clarabel`
+  covers runtime) and the runtime pip line is removed from the rule
+  shell. Verified on the server: `pixi lock` + `pixi install` +
+  `import mosek` / `import ampliconarchitectlib` succeed in a fresh env.
 - Issue #21 (clinical report fidelity — four defects verified against the
   GC01 tumor-only workdir): `methods_from_rule_runs.py` attributed
   checkpoint records by bare rule name and missed every per-instance key
