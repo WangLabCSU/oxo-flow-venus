@@ -18,10 +18,13 @@ description = "ecDNA / focal amplification reconstruction with AmpliconSuite (CN
 #   - AA_DATA_REPO must be exported: conserved-region blacklist, gene models,
 #     centromere gaps and the CNVkit reference live there (config.aa_data_repo).
 #   - The conda ampliconarchitect lib does a module-level `import mosek`, but
-#     conda has no mosek package; `pip install mosek` fixes the import (no
-#     license needed to import) and --AA_solver clarabel avoids any runtime
-#     license requirement (AA retries clarabel automatically; explicit is
-#     deterministic).
+#     conda has no mosek package; it is declared as a pixi [pypi-dependencies]
+#     entry in envs/amplicon/pixi.toml (no license needed to import) and
+#     --AA_solver clarabel avoids any runtime license requirement (AA retries
+#     clarabel automatically; explicit is deterministic). Do NOT pip-install
+#     mosek at rule runtime: that mutates the pixi env away from pixi.lock and
+#     the engine's env fingerprint then re-invalidates this rule on every
+#     subsequent run.
 #   - --no_repo_check skips the suite's git-based repo check (compute nodes
 #     have no git).
 #   - The suite writes <outdir>/<sample>_finish_flag.txt only after every
@@ -71,7 +74,6 @@ shell = """
 mkdir -p ecdna/{pair_id} logs && \
 export AA_DATA_REPO={config.aa_data_repo} && \
 export AS_NO_REPO_CHECK=1 && \
-python -m pip install --quiet mosek && \
 AmpliconSuite-pipeline.py \
     --sample_name {pair_id} \
     --sorted_bam {input[0]} \
