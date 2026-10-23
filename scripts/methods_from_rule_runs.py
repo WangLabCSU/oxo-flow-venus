@@ -52,26 +52,32 @@ TOOL_META = {
         "alleleCounter",
         "Raine et al. 2023, NAR Genomics",
     ),
+    "AmpliconSuite-pipeline.py": (
+        "AmpliconSuite",
+        "Deshpande et al. 2022, Nat Biotechnol",
+    ),
 }
 
-# Versions verified from THIS run's artifacts (BAM @PG VN records, per-run
-# logs, binary probes). Provenance column states where each was confirmed.
+# Versions verified from pipeline-run artifacts (BAM @PG VN records, per-run
+# logs, binary probes). Provenance column states the KIND of artifact each was
+# confirmed from — kept cohort-agnostic so the table stays truthful in any
+# cohort's report.
 VERIFIED_VERSIONS = [
-    ("fastp", "1.3.7", "qc log (fastp report)"),
+    ("fastp", "1.3.7", "fastp report (qc log)"),
     ("FastQC", "0.13.0", "qc log"),
     ("MultiQC", "1.35", "qc log"),
-    ("BWA-MEM2", "2.2.1 (AVX2)", "BAM @PG VN (align/*.bam)"),
-    ("SAMtools", "1.24", "BAM @PG VN (align/rna BAMs)"),
-    ("Picard", "3.5.0", "BAM @PG MarkDuplicates; mark_duplicates log"),
-    ("GATK", "4.6.2.0", "BAM @PG ApplyBQSR; mutect2 log (jar 4.6.2.0-1)"),
-    ("Manta", "1.6.0", "manta_Pt01.log (runWorkflow banner)"),
-    ("MSIsensor", "1.3.0", "bioconda env msi (msisensor 1.3.0)"),
-    ("CNVkit", "0.9.14", "cnv log"),
-    ("ASCAT", "3.2.0", "pixi env envs/ascat (bioconda)"),
-    ("alleleCounter", "4.3.0", "pixi env envs/ascat (cancerit-allelecount)"),
-    ("STAR", "2.7.11b", "BAM @PG VN; STAR Log.out"),
+    ("BWA-MEM2", "2.2.1 (AVX2)", "BAM @PG VN records"),
+    ("SAMtools", "1.24", "BAM @PG VN records"),
+    ("Picard", "3.5.0", "BAM @PG record (MarkDuplicates); run log"),
+    ("GATK", "4.6.2.0", "BAM @PG record (ApplyBQSR); run log jar banner"),
+    ("Manta", "1.6.0", "run log (runWorkflow banner)"),
+    ("MSIsensor", "1.3.0", "bioconda env probe"),
+    ("CNVkit", "0.9.14", "cnv run log"),
+    ("ASCAT", "3.2.0", "pixi env (bioconda)"),
+    ("alleleCounter", "4.3.0", "pixi env (cancerit-allelecount)"),
+    ("STAR", "2.7.11b", "BAM @PG VN record; STAR Log.out"),
     ("featureCounts", "2.1.1 (subread)", "featurecounts log banner"),
-    ("vep-rs", "115.2", "vep log (Ensembl VEP (Rust) v115.2)"),
+    ("vep-rs", "115.2", "vep run log (Ensembl VEP (Rust) banner)"),
     ("dnbc4tools", "3.0", "scrna run log (--version)"),
 ]
 
@@ -83,12 +89,27 @@ def first_word(cmd: str) -> str:
     return m.group(1) if m else ""
 
 
-def tool_name(cmd: str) -> str:
+def unwrap_bash_c(cmd: str) -> str | None:
+    """Inner script of a `pixi run --manifest-path X bash -c '<script>'` wrapper.
+
+    Engine-recorded commands are pixi-wrapped; the analytical tool identity
+    lives inside the -c payload, not in the wrapper tokens.
+    """
+    m = re.search(r"\bbash\s+-c\s+'(.*)'", cmd, re.S)
+    return m.group(1) if m else None
+
+
+def _meta_scan(cmd: str) -> tuple[str, str] | None:
     base = Path(first_word(cmd)).name
     tokens = [Path(t).name for t in cmd.split()]
     for key, meta in TOOL_META.items():
         if base.startswith(key) or any(t == key or t.startswith(key) for t in tokens):
-            return meta[0]
+            return meta
+    return None
+
+
+def _scripts_tool(cmd: str) -> str:
+    base = Path(first_word(cmd)).name
     if base in INTERPRETERS:  # python3 script.py -> script tool identity
         for tok in cmd.split()[1:]:
             b = Path(tok).name
@@ -97,13 +118,24 @@ def tool_name(cmd: str) -> str:
     return base
 
 
+def tool_name(cmd: str) -> str:
+    if first_word(cmd) == "pixi":
+        inner = unwrap_bash_c(cmd)
+        if inner:
+            return tool_name(inner)
+    meta = _meta_scan(cmd)
+    if meta:
+        return meta[0]
+    return _scripts_tool(cmd)
+
+
 def citation_for(cmd: str) -> str:
-    base = Path(first_word(cmd)).name
-    tokens = [Path(t).name for t in cmd.split()]
-    for key, meta in TOOL_META.items():
-        if base.startswith(key) or any(t == key or t.startswith(key) for t in tokens):
-            return meta[1]
-    return ""
+    if first_word(cmd) == "pixi":
+        inner = unwrap_bash_c(cmd)
+        if inner:
+            return citation_for(inner)
+    meta = _meta_scan(cmd)
+    return meta[1] if meta else ""
 
 
 def shorten_cmd(cmd: str, width: int = 240) -> str:
@@ -157,6 +189,35 @@ def load_manifest(
     return manifest
 
 
+def attribute_rule_runs(
+    rule_runs: dict, manifest: "OrderedDict[str, list[dict]]"
+) -> dict[str, dict[str, dict]]:
+    """Map manifest rule name -> {checkpoint key: record}.
+
+    Engine checkpoint keys are `<rule>_<instance>` for wildcard-instantiated
+    rules (e.g. ``ampliconsuite_GC01``) and the bare rule name for
+    singleton rules. Exact-name records were previously found, but every
+    per-instance record was missed (``rule_runs.get(name)`` on key
+    ``ampliconsuite_GC01``), so fresh per-sample runs were misreported as
+    "rotated out of the checkpoint window". Attribution here walks manifest
+    rule names LONGEST-FIRST so ``ascat_cohort_tumoronly`` is never
+    mis-attributed to its prefix-sibling ``ascat_cohort``.
+    """
+    names = sorted(
+        (r.get("name", "?") for rules in manifest.values() for r in rules),
+        key=len, reverse=True,
+    )
+    attributed: dict[str, dict[str, dict]] = {}
+    for key, rec in rule_runs.items():
+        if not isinstance(rec, dict):
+            continue
+        for name in names:
+            if key == name or key.startswith(name + "_"):
+                attributed.setdefault(name, {})[key] = rec
+                break
+    return attributed
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--checkpoint", required=True, help=".oxo-flow/checkpoint.json")
@@ -182,6 +243,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
+    attributed = attribute_rule_runs(rule_runs, manifest)
 
     lines: list[str] = ["## Methods (generated from actual pipeline execution)", ""]
     n_rules = sum(len(v) for v in manifest.values())
@@ -190,9 +252,9 @@ def main() -> int:
         f"{n_rules} rules across {len(manifest)} modules, in execution order "
         f"— as defined by the workflow and executed by the oxo-flow engine. "
         f"Verbatim commands are quoted from the run checkpoint for rules "
-        f"still inside its rolling window; rules rotated out of the window "
-        f"are listed from the workflow definition with their recorded exit "
-        f"status summarised from the run logs."
+        f"with checkpoint records (per-instance rules show the instance "
+        f"count and one representative command); rules rotated out of the "
+        f"window are listed from the workflow definition only."
     )
     lines.append("")
 
@@ -205,13 +267,20 @@ def main() -> int:
         lines.append("|---|---|---|---|---|")
         for rule in rules:
             name = rule.get("name", "?")
-            rec = rule_runs.get(name)
-            if rec is not None:
-                cmd = rec.get("command", "")
+            recs = attributed.get(name) or {}
+            if recs:
+                keys = sorted(recs)
+                rep = recs[keys[0]]
+                cmd = rep.get("command", "")
                 tool = tool_name(cmd) or "—"
                 cit = citation_for(cmd)
-                exit_code = rec.get("exit_code")
-                status = "✓ success" if exit_code == 0 else f"exit {exit_code}"
+                failed = [k for k in keys if recs[k].get("exit_code") != 0]
+                if failed:
+                    code = recs[failed[0]].get("exit_code")
+                    status = (f"exit {code} "
+                              f"({len(failed)}/{len(keys)} instance(s) failed)")
+                else:
+                    status = f"✓ success ({len(keys)} instance(s))"
                 cmd_cell = f"`{shorten_cmd(cmd)}`" if cmd else "—"
             else:
                 # Rotated out of the checkpoint window: identify the tool from
@@ -223,7 +292,11 @@ def main() -> int:
                 )
                 tool = tool_name(probe) if probe.strip() else "—"
                 cit = citation_for(probe) if probe.strip() else ""
-                status = "✓ success (record rotated out of checkpoint window)"
+                # No record: rotated out of the engine's rolling window, or
+                # never instantiated in this cohort (paired-only rules in a
+                # tumor-only run) — do NOT claim success for either case.
+                status = ("no checkpoint record (rotated out of the window, "
+                          "or not instantiated in this cohort)")
                 cmd_cell = "—"
             lines.append(f"| `{name}` | {tool} | {cit} | {status} | {cmd_cell} |")
         lines.append("")
@@ -242,6 +315,8 @@ def main() -> int:
         seen.add(f"{tool} {ver}")
         rows.append((tool, ver, cited.get(tool, ""), prov))
     for name, rec in rule_runs.items():
+        if not isinstance(rec, dict):
+            continue
         for key in ("stdout_tail", "stderr_tail"):
             for line in (rec.get(key) or "").splitlines():
                 m = re.search(r"version[:\s]+([0-9][0-9a-zA-Z.\-_]+)", line, re.I)
