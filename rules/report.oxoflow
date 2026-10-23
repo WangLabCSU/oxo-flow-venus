@@ -148,13 +148,48 @@ printf '[msi_cohort_tumoronly] tumor-only cohort: header-only table (MSI needs a
     > logs/msi_cohort.log
 """
 
-# Aggregate TMB + RNA QC + single-cell metrics + ASCAT + MSI into one
+# Cohort ecDNA table from the AmpliconClassifier outputs of the ampliconsuite
+# rule (ecdna/<pair>/<pair>_ecDNA_counts.tsv + _result_table.tsv). Works in
+# BOTH cohort modes: the suite takes the tumor BAM only (its internal CNVkit
+# step is tumor-only via the AA_DATA_REPO prebuilt reference), so there is no
+# paired/tumor-only split here. 0-amplicon samples are safe: the suite still
+# writes the counts TSV (one row, count 0) and collect_ecdna.py keeps that row.
+[[rules]]
+name = "ecdna_cohort"
+description = "Collect per-pair ecDNA counts and oncogene hits into cohort tables"
+expand_inputs = [
+    { pattern = "ecdna/{pair_id}/{pair_id}_ecDNA_counts.tsv", variables = { pair_id = "config.pairs_list" } },
+    { pattern = "ecdna/{pair_id}/{pair_id}_result_table.tsv", variables = { pair_id = "config.pairs_list" } },
+]
+output = [
+    "report/cohort_ecdna.tsv",
+    "report/ecdna_genes.tsv",
+]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = [
+    "report/cohort_ecdna.tsv",
+    "report/ecdna_genes.tsv",
+]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/collect_ecdna.py \
+    --inputs {input} \
+    --counts-output {output[0]} \
+    --genes-output {output[1]} \
+    2> logs/ecdna_cohort.log
+"""
+
+# Aggregate TMB + RNA QC + single-cell metrics + ecDNA + ASCAT + MSI into one
 # PATIENT-level cohort table. {input} expands to the full combined input
 # list (declared inputs first, then expand_inputs results); cohort_tables.py
 # routes every file by BASENAME (rna_qc_summary / scrna_metrics /
-# cohort_ascat / msi_cohort / else TMB), so ordering does not matter.
-# Sample keys are normalized to patient level (strips -TD/-B/-TR) so each
-# patient row carries tmb_* + rna_* + sc_* + ascat_* + msi_* columns.
+# cohort_ascat / cohort_ecdna / msi_cohort / else TMB), so ordering does not
+# matter. Sample keys are normalized to patient level (strips -TD/-B/-TR) so
+# each patient row carries tmb_* + rna_* + sc_* + ecdna_* + ascat_* + msi_*
+# columns.
 [[rules]]
 name = "cohort_tables"
 description = "Outer-join per-module tables into patient-level cohort summary"
@@ -162,6 +197,7 @@ input = [
     "rna/qc/rna_qc_summary.tsv",
     "report/scrna_metrics.tsv",
     "ascat/cohort_ascat.tsv",
+    "report/cohort_ecdna.tsv",
     "report/msi_cohort.tsv",
 ]
 expand_inputs = [
@@ -195,6 +231,7 @@ input = [
     "report/scrna_metrics.tsv",
     "notes/interpretation.md",
     "ascat/cohort_ascat.tsv",
+    "report/cohort_ecdna.tsv",
     "report/msi_cohort.tsv",
 ]
 output = [
@@ -218,7 +255,8 @@ python {config.venus_tools}/clinical_report.py \
     --scrna-metrics {input[3]} \
     --notes {input[4]} \
     --ascat {input[5]} \
-    --msi {input[6]} \
+    --ecdna {input[6]} \
+    --msi {input[7]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \

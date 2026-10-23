@@ -1,0 +1,93 @@
+[workflow]
+name = "venus-ecdna"
+description = "ecDNA / focal amplification reconstruction with AmpliconSuite (CNVkit -> AA -> AC)"
+
+# Wraps AmpliconSuite-pipeline (conda bioconda::ampliconsuite), which internally
+# runs CNVkit batch -m wgs -> amplified_intervals (seed filtering) ->
+# AmpliconArchitect (reconstruction) -> AmpliconClassifier (ecDNA/BFB/linear
+# classification, oncogene counting). Validated end-to-end on GC01-TD
+# (~60x WGS: 601.9s total, 0 amplicons — see docs/20261022-ampliconsuite-ecdna-survey.md).
+#
+# Input is the BQSR BAM only — no matched-normal dependency — so the rule
+# instantiates in BOTH paired and tumor-only cohorts (no when-gate).
+# The suite's internal CNVkit tumor-only step consumes the AA_DATA_REPO
+# reference set (AA_DATA_REPO/hg38/GRCh38_CNVkit_median_autosome.hg38.cnn
+# style prebuilt references), the same lineage as config.cnv_reference.
+#
+# Runtime essentials (validated on the server):
+#   - AA_DATA_REPO must be exported: conserved-region blacklist, gene models,
+#     centromere gaps and the CNVkit reference live there (config.aa_data_repo).
+#   - The conda ampliconarchitect lib does a module-level `import mosek`, but
+#     conda has no mosek package; `pip install mosek` fixes the import (no
+#     license needed to import) and --AA_solver clarabel avoids any runtime
+#     license requirement (AA retries clarabel automatically; explicit is
+#     deterministic).
+#   - --no_repo_check skips the suite's git-based repo check (compute nodes
+#     have no git).
+#   - The suite writes <outdir>/<sample>_finish_flag.txt only after every
+#     stage completes (paalib/config_validator.py), classification TSVs under
+#     <outdir>/<sample>_classification/, CNVkit/AA intermediates under their
+#     own <outdir>/<sample>_* dirs. The shell asserts the finish flag, lifts
+#     the five classification TSVs to the declared output paths, and renames
+#     the flag to .suite_finished — a partially-failed run never satisfies
+#     the declared outputs.
+#
+# Extra levers (pass via config.ecdna_args):
+#   --normal_bam   matched-normal CNVkit reference for paired cohorts
+#   --sv_vcf       augment AA SVs with external calls (e.g. Manta somaticSV)
+#   --cnv_bed      seed intervals from an existing .cns instead of rerunning
+#                  the CNVkit/seed-filter stage
+[[rules]]
+name = "ampliconsuite"
+description = "ecDNA analysis: AmpliconSuite-pipeline (CNVkit seed -> AA -> AC)"
+input = [
+    "bqsr/{experiment}/{experiment}.bqsr.bam",
+]
+output = [
+    "ecdna/{pair_id}/{pair_id}_ecDNA_counts.tsv",
+    "ecdna/{pair_id}/{pair_id}_gene_list.tsv",
+    "ecdna/{pair_id}/{pair_id}_feature_basic_properties.tsv",
+    "ecdna/{pair_id}/{pair_id}_amplicon_classification_profiles.tsv",
+    "ecdna/{pair_id}/{pair_id}_result_table.tsv",
+    "ecdna/{pair_id}/.suite_finished",
+]
+# Keep ALL: the counts/gene_list TSVs feed the cohort report, and the rest are
+# small — re-running the suite (hours for amplicon-rich samples) to recover a
+# deleted table would cost far more than keeping them.
+protected_output = [
+    "ecdna/{pair_id}/{pair_id}_ecDNA_counts.tsv",
+    "ecdna/{pair_id}/{pair_id}_gene_list.tsv",
+    "ecdna/{pair_id}/{pair_id}_feature_basic_properties.tsv",
+    "ecdna/{pair_id}/{pair_id}_amplicon_classification_profiles.tsv",
+    "ecdna/{pair_id}/{pair_id}_result_table.tsv",
+    "ecdna/{pair_id}/.suite_finished",
+]
+# AmpliconSuite runs its own CNVkit (WGS mode) over the whole genome, then AA
+# on the seed intervals: the suite is internally parallel via --nthreads.
+threads = 16
+memory = "64G"
+environment = { pixi = "envs/amplicon/pixi.toml" }
+shell = """
+mkdir -p ecdna/{pair_id} logs && \
+export AA_DATA_REPO={config.aa_data_repo} && \
+export AS_NO_REPO_CHECK=1 && \
+python -m pip install --quiet mosek && \
+AmpliconSuite-pipeline.py \
+    --sample_name {pair_id} \
+    --sorted_bam {input[0]} \
+    --ref GRCh38 \
+    --run_AA --run_AC \
+    --nthreads {threads} \
+    --AA_solver {config.aa_solver} \
+    --no_repo_check \
+    {config.ecdna_args} \
+    --output_directory ecdna/{pair_id}/ \
+    2> logs/ampliconsuite_{pair_id}.log && \
+test -f ecdna/{pair_id}/{pair_id}_finish_flag.txt && \
+cp ecdna/{pair_id}/{pair_id}_classification/{pair_id}_ecDNA_counts.tsv ecdna/{pair_id}/ && \
+cp ecdna/{pair_id}/{pair_id}_classification/{pair_id}_gene_list.tsv ecdna/{pair_id}/ && \
+cp ecdna/{pair_id}/{pair_id}_classification/{pair_id}_feature_basic_properties.tsv ecdna/{pair_id}/ && \
+cp ecdna/{pair_id}/{pair_id}_classification/{pair_id}_amplicon_classification_profiles.tsv ecdna/{pair_id}/ && \
+cp ecdna/{pair_id}/{pair_id}_classification/{pair_id}_result_table.tsv ecdna/{pair_id}/ && \
+mv ecdna/{pair_id}/{pair_id}_finish_flag.txt ecdna/{pair_id}/.suite_finished
+"""

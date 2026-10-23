@@ -114,6 +114,17 @@ cnv_annotate_args = ""
 # (VanLoo-lab Zenodo record 14008443, WGS hg38 set).
 ascat_refdir = "/home/data/wsx/hnzl_data/refdata/ascat/v3.2-hg38-wgs"
 
+# ecDNA (AmpliconSuite): aa_data_repo is the suite's AA_DATA_REPO data dir
+# (conserved-region blacklist, gene models, centromere gaps, prebuilt CNVkit
+# tumor-only references; download with the suite's install.sh). aa_solver is
+# AmpliconArchitect's conic solver — "clarabel" needs no license (mosek does;
+# the rule pip-installs the mosek wheel only so its module-level import
+# succeeds). ecdna_args passes extra suite flags verbatim, e.g. --normal_bam/
+# --sv_vcf/--cnv_bed (see rules/ecdna.oxoflow header).
+aa_data_repo = "/home/data/reference/aa_data_repo"
+aa_solver = "clarabel"
+ecdna_args = ""
+
 # SV (Manta): "" for WGS; for WES/panel set "--exome" so Manta's depth-based
 # filters (off-target high-depth suppression) do not discard real events.
 sv_exome_args = ""
@@ -206,6 +217,9 @@ path = "rules/rna.oxoflow"
 
 [[include]]
 path = "rules/scrna.oxoflow"
+
+[[include]]
+path = "rules/ecdna.oxoflow"
 
 [[include]]
 path = "rules/report.oxoflow"

@@ -37,6 +37,8 @@ def route(path: str) -> str:
         return "sc"
     if name == "cohort_ascat.tsv":
         return "ascat"
+    if name == "cohort_ecdna.tsv":
+        return "ecdna"
     if name == "msi_cohort.tsv":
         return "msi"
     return "tmb"
@@ -60,7 +62,7 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     args = ap.parse_args()
 
-    groups: dict[str, list[str]] = {"rna": [], "sc": [], "ascat": [], "msi": [], "tmb": []}
+    groups: dict[str, list[str]] = {"rna": [], "sc": [], "ascat": [], "ecdna": [], "msi": [], "tmb": []}
     for path in args.inputs:
         groups[route(path)].append(path)
     if not groups["rna"] or not groups["sc"]:
@@ -84,6 +86,8 @@ def main() -> int:
     ]
     if groups["ascat"]:
         sources.append(("ascat_", read_tsv(groups["ascat"][0])))
+    if groups["ecdna"]:
+        sources.append(("ecdna_", read_tsv(groups["ecdna"][0])))
     if groups["msi"]:
         sources.append(("msi_", read_tsv(groups["msi"][0])))
 
