@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ecDNA / focal-amplification module (issue #19) wrapping AmpliconSuite-
+  pipeline 1.6 (bioconda `ampliconsuite`; CNVkit seed intervals ->
+  AmpliconArchitect -> AmpliconClassifier). New rule `ampliconsuite`
+  (`rules/ecdna.oxoflow`, env `envs/amplicon/pixi.toml`) takes the BQSR tumor
+  BAM only — no matched-normal dependency, instantiates in BOTH paired and
+  tumor-only cohorts. Outputs the five classification TSVs lifted to
+  `ecdna/<pair>/` plus a `.suite_finished` sentinel (the suite's own finish
+  flag, renamed — a partially-failed run never satisfies the outputs). New
+  `[config]` keys: `aa_data_repo` (suite AA_DATA_REPO dir), `aa_solver`
+  (default `clarabel` — no license needed; the rule pip-installs the mosek
+  wheel only so the module-level import succeeds), `ecdna_args` (verbatim
+  passthrough, e.g. `--normal_bam/--sv_vcf/--cnv_bed`). `scripts/
+  verify_refdata.sh` checks the AA data repo (GRCh38/GRCh38_viral/mm10 +
+  CNVkit ref + seed blacklist).
+- Cohort ecDNA reporting: `ecdna_cohort` rule -> `report/cohort_ecdna.tsv` +
+  `report/ecdna_genes.tsv` via `scripts/collect_ecdna.py` (strips the
+  suite's `#sample` header prefix; joins amplicon classification from the
+  result_table; 0-amplicon samples keep their counts row). `cohort_ecdna.tsv`
+  joins into the patient-level summary (`ecdna_count` column) and
+  `clinical_report.py` gains an `--ecdna` section (counts table + methods
+  note).
 - CNVkit gene annotation support, new `[config]` key `cnv_annotate_args`
   (default `""`): names bins with a gene model, e.g.
   `--annotate /path/gene.bed`, so the built reference `.cnn` and downstream

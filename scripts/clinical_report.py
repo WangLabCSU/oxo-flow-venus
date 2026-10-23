@@ -252,11 +252,28 @@ MSI_CUTOFF_NOTE = (
     "or MLH1 promoter methylation).\n"
 )
 
+# ecDNA reconstruction: AmpliconSuite-pipeline (CNVkit seed intervals ->
+# AmpliconArchitect -> AmpliconClassifier), GRCh38, --AA_solver clarabel.
+# The suite takes the tumor BAM only; its internal CNVkit step is tumor-only
+# against a prebuilt normal reference from the AA data repo.
+ECDNA_METHODS = (
+    "Focal amplification architecture was reconstructed with "
+    "AmpliconSuite-pipeline (v1.6, CNVkit seed intervals -> AmpliconArchitect "
+    "-> AmpliconClassifier; Deshpande et al., *Nat Biotechnol* 2022) from the "
+    "BQSR-aligned tumor WGS BAM (GRCh38; AA data repo for conserved-region "
+    "filtering and the tumor-only CNVkit reference; conic solver clarabel). "
+    "ecDNA_count is the number of circular extrachromosomal amplification "
+    "features per sample; a count of 0 means no ecDNA was identified (the "
+    "sample may still carry linear/BFB amplifications — see the "
+    "ecDNA/amplification classification tables in the delivery directory).\n"
+)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--tmb")
     ap.add_argument("--ascat", help="ASCAT cohort purity/ploidy table")
+    ap.add_argument("--ecdna", help="ecDNA cohort counts table (AmpliconClassifier)")
     ap.add_argument("--msi", help="MSI cohort table (BH-corrected)")
     ap.add_argument("--rna-qc")
     ap.add_argument("--scrna-metrics")
@@ -295,6 +312,13 @@ def main() -> int:
                   "aberrant_cell_fraction", "goodness_of_fit",
                   "n_segments", "non_aberrant", "failed"]))
         parts.append(ASCAT_INTERP)
+
+    if args.ecdna:
+        parts.append("## ecDNA / focal amplification (AmpliconSuite)\n")
+        parts.append(ECDNA_METHODS)
+        parts.append(tsv_markdown(
+            args.ecdna, title="ecDNA counts per sample",
+            only=["sample", "ecDNA_count"]))
 
     if args.msi:
         parts.append("## Microsatellite instability (MSI)\n")

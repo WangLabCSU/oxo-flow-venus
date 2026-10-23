@@ -128,6 +128,20 @@ if [ -d "$ASDIR" ]; then
   fi
 fi
 
+# --- ecDNA (AmpliconSuite AA_DATA_REPO, suite install.sh layout) -------------
+check aa_data_repo ne "$(cfg aa_data_repo)"
+AAREPO=$(cfg aa_data_repo)
+if [ -d "$AAREPO" ]; then
+  for sub in GRCh38 GRCh38_viral mm10; do
+    [ -d "$AAREPO/$sub" ] || bad "aa_data_repo missing $AAREPO/$sub"
+  done
+  [ -f "$AAREPO/GRCh38/GRCh38_cnvkit_filtered_ref.cnn" ] || \
+    bad "aa_data_repo missing GRCh38/GRCh38_cnvkit_filtered_ref.cnn (suite CNVkit tumor-only ref)"
+  [ -f "$AAREPO/GRCh38/conserved_gain5_hg38.bed" ] || \
+    bad "aa_data_repo missing GRCh38/conserved_gain5_hg38.bed (AA seed blacklist)"
+  [ "$FAIL" -eq 0 ] && ok "aa_data_repo GRCh38/GRCh38_viral/mm10 + CNVkit ref + seed blacklist"
+fi
+
 # --- pipeline helpers -------------------------------------------------------
 VT=$(cfg venus_tools)
 [ -d "$VT" ] && ok "venus_tools dir: $VT" || note "venus_tools relative: $VT (resolve from the run cwd)"
