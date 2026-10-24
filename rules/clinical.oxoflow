@@ -68,6 +68,7 @@ mkdir -p report/clinical logs && \
 bcftools annotate -a {input[5]} -c INFO/AF \
     -Oz -o {output[0]} {input[0]} \
     2>> logs/clinical_snv_{pair_id}.log && \
+bcftools index -t -f {output[0]} && \
 bcftools annotate -a {input[1]} -c ID,INFO/CLNSIG,INFO/CLNDN,INFO/GENEINFO \
     -Oz -o {output[1]} {output[0]} \
     2>> logs/clinical_snv_{pair_id}.log && \

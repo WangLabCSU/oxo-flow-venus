@@ -149,7 +149,7 @@ clinical_kb_tag = "CIViC_01-Oct-2026"
 civic_variant_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-VariantSummaries.tsv"
 civic_evidence_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-AcceptedClinicalEvidenceSummaries.tsv"
 civic_assertion_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-AcceptedAssertionSummaries.tsv"
-clinvar_vcf = "/home/data/reference/clinical_kb/clinvar.vcf.gz"
+clinvar_vcf = "/home/data/reference/clinical_kb/clinvar.chr.vcf.gz"
 oncokb_token = ""
 
 # Pipeline helpers

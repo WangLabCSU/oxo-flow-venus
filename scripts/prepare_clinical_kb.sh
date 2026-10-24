@@ -57,6 +57,16 @@ for f in clinvar.vcf.gz clinvar.vcf.gz.tbi; do
   fi
 done
 
+# Normalize ClinVar contigs to chr-prefixed names (NCBI ships "1"; the
+# pipeline's GRCh38.d1.vd1 uses "chr1" — without this the bcftools join is
+# silently empty). One-time rename + index into clinvar.chr.vcf.gz.
+if [ ! -s clinvar.chr.vcf.gz ]; then
+  echo "[prepare_clinical_kb] renaming ClinVar contigs to chr-prefix..."
+  printf '1 chr1\n2 chr2\n3 chr3\n4 chr4\n5 chr5\n6 chr6\n7 chr7\n8 chr8\n9 chr9\n10 chr10\n11 chr11\n12 chr12\n13 chr13\n14 chr14\n15 chr15\n16 chr16\n17 chr17\n18 chr18\n19 chr19\n20 chr20\n21 chr21\n22 chr22\nX chrX\nY chrY\nMT chrM\n' > /tmp/clinvar_chr_map.txt
+  bcftools annotate --rename-chrs /tmp/clinvar_chr_map.txt clinvar.vcf.gz -Oz -o clinvar.chr.vcf.gz
+  bcftools index -f -t clinvar.chr.vcf.gz
+fi
+
 echo "[prepare_clinical_kb] done. Contents of $KB_DIR:"
 ls -la
 echo
@@ -65,4 +75,4 @@ echo "  clinical_kb_tag = \"CIViC_$TAG\""
 echo "  civic_variant_tsv   = \"$KB_DIR/${TAG}-VariantSummaries.tsv\""
 echo "  civic_evidence_tsv  = \"$KB_DIR/${TAG}-AcceptedClinicalEvidenceSummaries.tsv\""
 echo "  civic_assertion_tsv = \"$KB_DIR/${TAG}-AcceptedAssertionSummaries.tsv\""
-echo "  clinvar_vcf         = \"$KB_DIR/clinvar.vcf.gz\""
+echo "  clinvar_vcf         = \"$KB_DIR/clinvar.chr.vcf.gz\""
