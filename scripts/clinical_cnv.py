@@ -101,7 +101,9 @@ def main():
             "notes": p.get("notes", ""),
         })
 
-    out = pd.DataFrame(rows)
+    out = pd.DataFrame(rows, columns=[
+        "gene", "call", "segment_log2", "segment_cn", "segment",
+        "ecDNA_evidence", "disease_context", "therapy_context", "notes"])
     out.to_csv(args.out, sep="\t", index=False)
     sys.stderr.write(f"[clinical_cnv] wrote {len(out)} calls -> {args.out}\n")
 

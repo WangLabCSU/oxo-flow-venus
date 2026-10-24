@@ -58,6 +58,7 @@ def main():
                      f"{len(spans)}/{len(genes)}\n")
 
     vcf = pysam.VariantFile(args.vcf)
+    seen_bnd = set()
     rows = []
     for rec in vcf.fetch():
         if (rec.info.get("SVTYPE") or "") != "BND":
@@ -69,6 +70,11 @@ def main():
         g2 = gene_at(spans, m.group(1), int(m.group(2)))
         if not g1 and not g2:
             continue
+        # Manta emits each BND twice (record + MATEID mirror); keep one.
+        key = tuple(sorted([f"{rec.chrom}:{rec.pos}", f"{m.group(1)}:{m.group(2)}"]))
+        if key in seen_bnd:
+            continue
+        seen_bnd.add(key)
         for _, p in pairs.iterrows():
             a, b = p["gene_5"], p["gene_3"]
             match = (g1 and g2 and {g1.upper(), g2.upper()} == {a.upper(), b.upper()}) \
@@ -77,7 +83,11 @@ def main():
                 or (a == "*" and g2 and g2.upper() == b.upper())
             if not match:
                 continue
-            fusion = f"{g1 or g2}--{g2 or g1}" if (g1 or g2) and (g2 or g1) else (g1 or g2)
+            if g1 and g2:
+                fusion = f"{g1}--{g2}"
+            else:
+                ghit = g1 or g2
+                fusion = (f"{ghit} (single breakpoint; partner unresolved)")
             rows.append({
                 "fusion_candidate": fusion,
                 "gene_5_call": g1, "gene_3_call": g2,
@@ -92,7 +102,10 @@ def main():
                 "notes": p.get("notes", ""),
             })
 
-    out = pd.DataFrame(rows)
+    out = pd.DataFrame(rows, columns=[
+        "fusion_candidate", "gene_5_call", "gene_3_call", "breakpoint1",
+        "breakpoint2", "sv_id", "filter", "scoring", "disease_context",
+        "evidence_context", "notes"])
     out.to_csv(args.out, sep="\t", index=False)
     sys.stderr.write(f"[clinical_sv] wrote {len(out)} fusion candidates -> {args.out}\n")
 

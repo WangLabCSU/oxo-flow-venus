@@ -146,9 +146,16 @@ def main():
 
     sig = read_tsv(args.signatures)
     if not sig.empty:
-        top = sig.iloc[0].to_dict()
-        topsig = sorted(top.items(), key=lambda kv: -float(kv[1] or 0))[:2]
-        detail = ", ".join(f"{k}={float(v):.2f}" for k, v in topsig if v)
+        if "Signature" in sig.columns:  # long format: Signature|Attributed_Mutations|Exposure_Fraction
+            frac = pd.to_numeric(sig.get("Exposure_Fraction"), errors="coerce")
+            top2 = sig.assign(_f=frac.fillna(0)).sort_values("_f", ascending=False).head(2)
+            detail = ", ".join(f"{r['Signature']}={r['_f']:.2f}"
+                               for _, r in top2.iterrows())
+        else:  # wide fallback: one row, signature-named columns
+            top = sig.iloc[0].to_dict()
+            pairs_ = sorted(((k, v) for k, v in top.items() if v),
+                            key=lambda kv: -float(kv[1] or 0))[:2]
+            detail = ", ".join(f"{k}={float(v):.2f}" for k, v in pairs_)
         biomarkers.append({
             "class": "SBS signature", "biomarker": "exposure context",
             "amp_tier": "", "detail": detail, "evidence": "COSMIC v3.1 NNLS",
