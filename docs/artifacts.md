@@ -186,6 +186,24 @@ chr-scattered pattern.
 | `cohort_tables` ×1 | `report/cohort_summary.tsv` | **A** | |
 | `clinical_report` ×1 | `report/venus_clinical_report.md` + `.html` | **A** | final deliverable |
 
+### Clinical interpretation (`rules/clinical.oxoflow`, added post-0.5.0)
+
+Every output here is cheap to regenerate from protected upstreams (VEP VCF,
+CNVkit cns, Manta SV, TMB/MSI/signatures) plus the host KB dumps — class **B**
+by regeneration cost, **A** by informativeness. Per the module-protection
+convention the evidence/biomarker/therapy tables are declared
+`protected_output`, so they survive all clean strategies regardless.
+
+| Rule (×n) | Output | Class | Notes |
+|---|---|---|---|
+| `clinical_kb_prep` ×1 | `report/clinical/kb_versions.tsv` | **A** | KB provenance consumed by the report |
+| `clinical_snv_annotate` ×pairs | `report/clinical/{pair_id}.snv_evidence.tsv` (protected); `{pair_id}.annotated.vcf.gz`(+`.tbi`), `{pair_id}.gnomad.vcf.gz` | B | gnomAD/ClinVar joins + CIViC tiering; VCFs regenerable in minutes |
+| `clinical_oncokb` / `_skip` ×pairs | `report/clinical/{pair_id}.snv_evidence.onco.tsv` | B | token-gated enrichment or byte-copy passthrough |
+| `clinical_cnv_genes` ×pairs | `report/clinical/{pair_id}.cnv_evidence.tsv` | B | panel calls from call.cns + ecDNA cross-flag |
+| `clinical_sv_fusions_{paired,tumoronly}` ×pairs | `report/clinical/{pair_id}.sv_evidence.tsv` | B | complementary when-gates share the path |
+| `clinical_biomarkers_{paired,tumoronly}` ×pairs | `report/clinical/{pair_id}.{biomarkers,therapies}.tsv` | B/A | per-patient deliverables |
+| `clinical_cohort` ×1 | `report/clinical_cohort.tsv` | **A** | feeds `clinical_report --clinical` |
+
 ### Never-tracked files (all D)
 
 | Path | Producer | Count (this cohort) |

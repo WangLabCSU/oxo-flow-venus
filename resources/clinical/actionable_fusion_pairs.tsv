@@ -1,0 +1,19 @@
+gene_5	gene_3	disease_context	evidence_context	notes
+CLDN18	ARHGAP26	gastric (diffuse/GS)	Case study; recurrent 15% TCGA GS-type	Yao 2015; loss of epithelial integrity; CLDN18.2-adjacent biology
+CLDN18	ARHGAP6	gastric (diffuse/GS)	Case study	TCGA recurrent fusion
+FGFR2	*	gastric	Preclinical/targeted trial (FGFR2 inhibitors)	Promoter-swap 5' partner varies; * = any 3' partner or 5' regulatory swap hits FGFR2 coding
+NTRK1	*	pan-cancer	FDA/NMPA larotrectinib/entrectinib (NTRK fusion any tissue)	* = any partner gene
+NTRK2	*	pan-cancer	FDA/NMPA (tissue-agnostic)	*
+NTRK3	*	pan-cancer	FDA/NMPA (tissue-agnostic)	*
+ALK	*	pan-cancer	FDA/NMPA ALK inhibitors	*
+ROS1	*	pan-cancer	FDA/NMPA entrectinib/crizotinib	*
+RET	*	pan-cancer	FDA/NMPA selpercatinib/pralsetinib	*
+SLC34A2	ROS1	pan-cancer	FDA/NMPA	classic ROS1 partner
+EML4	ALK	pan-cancer	FDA/NMPA	classic ALK partner
+TPM3	NTRK1	pan-cancer	FDA/NMPA	classic NTRK1 partner
+ETV6	NTRK3	pan-cancer	FDA/NMPA	classic NTRK3 partner
+TFG	NTRK1	pan-cancer	FDA/NMPA	*
+CD74	ROS1	pan-cancer	FDA/NMPA	*
+KIF5B	RET	pan-cancer	FDA/NMPA	*
+CCDC6	RET	pan-cancer	FDA/NMPA	*
+NRG1	fusions (ERBB context)	pan-cancer	trial (zenocutuzumab FDA 2024)	handle as 3'-NRG1 or 5'-NRG1 pattern

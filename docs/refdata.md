@@ -42,6 +42,7 @@ scripts/verify_refdata.sh    # from the repo root, on the reference host
 | CNVkit tumor-only reference | `cnv_reference` | not deployed here | see §7 |
 | ASCAT G1000 hg38 WGS set | `ascat_refdir` | ASCAT 3.2 / Zenodo 14008443 | see §8 |
 | MSIsensor reference list | (derived) | generated per run | see §9 |
+| Clinical KB (CIViC dump + ClinVar VCF) | `civic_*_tsv`, `clinvar_vcf` | CIViC monthly + ClinVar weekly | see §10 |
 
 ---
 
@@ -220,6 +221,43 @@ each with `.tbi`:
 microsatellite loci is **generated per cohort** from the genome FASTA by
 `msisensor-pro scan -d $genome_fa` (rule `msi_scan`, shared across pairs).
 Its provenance is therefore exactly §1's FASTA — nothing to download.
+
+---
+
+## 10. Clinical knowledgebases — CIViC monthly dump + ClinVar weekly VCF
+
+Consumed by `rules/clinical.oxoflow` (`clinical_snv_annotate` and friends).
+Deployed at `/home/data/reference/clinical_kb/` (override with
+`CLINICAL_KB_DIR` for the prep script):
+
+| File | Origin | Refresh |
+|---|---|---|
+| `<TAG>-VariantSummaries.tsv` | CIViC monthly release (CC0), `civicdb.org/releases` | monthly |
+| `<TAG>-AcceptedClinicalEvidenceSummaries.tsv` | same release | monthly |
+| `<TAG>-AcceptedAssertionSummaries.tsv` | same release (carries `amp_category` — the AMP tier backbone) | monthly |
+| `clinvar.vcf.gz` (+`.tbi`) | NCBI `ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/` | weekly |
+
+Download/refresh is one command — `scripts/prepare_clinical_kb.sh` discovers
+the latest CIViC monthly release via the public GraphQL API, downloads the
+TSVs + ClinVar VCF idempotently, and prints the config lines to paste into
+`venus.oxoflow` (bump `clinical_kb_tag` so the report records the KB version).
+
+**Coordinate-build caveat:** CIViC variant coordinates are GRCh37 (checked
+2026-10: 1,292 GRCh37 vs 1 GRCh38 records in `VariantSummaries`), while the
+pipeline is GRCh38. `clinical_snv_annotate` therefore only joins **ClinVar and
+gnomAD** by GRCh38 coordinates via bcftools; CIViC matching happens in
+`scripts/clinical_tier.py` build-independently — gene + normalized protein
+change (primary), ClinVar VariationID bridge (secondary), GRCh38 coordinates
+(tertiary) — the same strategy as the OncoKB annotator. When CIViC ships real
+GRCh38 coordinates the tertiary path tightens automatically.
+
+Verification is integrated into `scripts/verify_refdata.sh` (column-shape
+checks on the TSVs; WARN-only until first download, like §7).
+
+OncoKB (optional enrichment, `oncokb_token` in config) has **no local dump**:
+the rule queries the REST API at run time with a free academic token from
+<https://www.oncokb.org/api-access> (institutional email; Chakravarty et al.
+2017, JCO PO).
 
 ---
 

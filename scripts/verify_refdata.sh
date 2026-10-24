@@ -95,6 +95,24 @@ else
   warn "cnv_reference not deployed: $CNV_REF (expected; only tumor-only CNV needs it)"
 fi
 
+# --- Clinical KB (configured; WARN-only until downloaded — refdata.md §10) ---
+CIVIC_V=$(cfg civic_variant_tsv); CIVIC_E=$(cfg civic_evidence_tsv)
+CIVIC_A=$(cfg civic_assertion_tsv); CLINVAR=$(cfg clinvar_vcf)
+if [ -e "$CIVIC_V" ] && [ -e "$CIVIC_E" ] && [ -e "$CIVIC_A" ] && [ -e "$CLINVAR" ]; then
+  check civic_variant_tsv f "$CIVIC_V"
+  check civic_evidence_tsv f "$CIVIC_E"
+  check civic_assertion_tsv f "$CIVIC_A"
+  check clinvar_vcf f "$CLINVAR"
+  check clinvar_vcf.tbi f "$CLINVAR.tbi"
+  hdr=$(head -1 "$CIVIC_V" | tr '\t' '\n' | grep -c . || true)
+  [ "$hdr" -ge 20 ] || bad "CIViC VariantSummaries header looks wrong ($hdr cols)"
+  sig=$(head -1 "$CIVIC_A" | grep -c "amp_category" || true)
+  [ "$sig" -eq 1 ] || bad "CIViC AssertionSummaries lacks amp_category column"
+  ok "clinical KB (CIViC + ClinVar) present"
+else
+  warn "clinical KB not deployed: run scripts/prepare_clinical_kb.sh (clinical rules will fail until then)"
+fi
+
 # --- ASCAT (Zenodo 14008443, WGS hg38) --------------------------------------
 ASDIR=$(cfg ascat_refdir)
 check ascat_refdir d "$ASDIR"

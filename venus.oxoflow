@@ -138,6 +138,20 @@ sv_exome_args = ""
 msi_coverage = "15"
 msi_targets_args = ""
 
+# Clinical interpretation knowledgebases (CIViC monthly dump + ClinVar weekly
+# VCF; download/refresh via scripts/prepare_clinical_kb.sh, checklist in
+# docs/refdata.md). CIViC coordinates are GRCh37 — clinical_tier.py matches
+# build-independently (gene+protein change, ClinVar VariationID bridge).
+# clinical_kb_tag is provenance only; bump it when the dumps are refreshed.
+# oncokb_token: free academic token from https://www.oncokb.org/api-access —
+# empty string disables the OncoKB enrichment rule (CIViC remains the backbone).
+clinical_kb_tag = "CIViC_01-Oct-2026"
+civic_variant_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-VariantSummaries.tsv"
+civic_evidence_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-AcceptedClinicalEvidenceSummaries.tsv"
+civic_assertion_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-AcceptedAssertionSummaries.tsv"
+clinvar_vcf = "/home/data/reference/clinical_kb/clinvar.vcf.gz"
+oncokb_token = ""
+
 # Pipeline helpers
 venus_tools = "scripts"
 workflow_file = "venus.oxoflow"
@@ -220,6 +234,9 @@ path = "rules/scrna.oxoflow"
 
 [[include]]
 path = "rules/ecdna.oxoflow"
+
+[[include]]
+path = "rules/clinical.oxoflow"
 
 [[include]]
 path = "rules/report.oxoflow"

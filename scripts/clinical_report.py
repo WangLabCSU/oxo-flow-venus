@@ -299,6 +299,63 @@ ECDNA_METHODS = (
     "ecDNA/amplification classification tables in the delivery directory).\n"
 )
 
+# Clinical interpretation: PASS+VEP variants joined with gnomAD AF and ClinVar
+# (GRCh38 coordinates), tiered against CIViC assertions/evidence via
+# build-independent matching (gene + protein change / ClinVar VariationID);
+# CNV focal calls on the actionability panel; fusion candidates from Manta SV
+# vs the curated pair table; AMP tiers follow the VICC meta-knowledgebase
+# mapping (Wagner et al., Nat Genet 2020).
+CLINICAL_METHODS = (
+    "Actionable-variant interpretation matched PASS+VEP somatic variants to "
+    "CIViC (monthly data dump, CC0; gene + protein-change and ClinVar "
+    "VariationID matching because CIViC coordinates are GRCh37) with ClinVar "
+    "pathogenicity context and gnomAD allele frequencies joined on GRCh38 "
+    "coordinates via bcftools. AMP/ASCO/CAP tiers follow the VICC "
+    "meta-knowledgebase mapping (Wagner et al., *Nat Genet* 2020); CNV focal "
+    "amplification/deletion calls used a curated actionability gene panel "
+    "cross-flagged with AmpliconSuite ecDNA evidence, and fusion candidates "
+    "were screened against a curated partner table. Therapy options combine "
+    "CIViC evidence with a curated NMPA/CSCO context table (approval region "
+    "and line stated per row). All tumor-only calls are putative-somatic: "
+    "without a matched normal, rare germline variants absent from gnomAD "
+    "cannot be excluded, and SV calls are unscored candidateSV. Clinical use "
+    "requires orthogonal confirmation.\n"
+)
+
+CLINICAL_NOT_RUN = (
+    "_Clinical interpretation: no cohort table (rules not instantiated or "
+    "rotated out of the checkpoint window)._\n"
+)
+
+
+def clinical_markdown(path: str, title: str = "Clinical interpretation") -> str:
+    """Render the cohort clinical table grouped by patient, Tier I first."""
+    rows = read_tsv(path)
+    parts = [f"## {title}\n"]
+    if not rows:
+        parts.append(CLINICAL_NOT_RUN)
+        return "\n".join(parts)
+    parts.append(CLINICAL_METHODS)
+    cols = [c for c in ["pair_id", "class", "biomarker", "amp_tier", "detail",
+                        "evidence", "caveat"] if c in rows[0]]
+    parts.append(tsv_markdown(path, title="Actionable biomarkers (all tiers)",
+                              only=cols))
+    tier12 = [r for r in rows if r.get("amp_tier") in ("I", "II")]
+    if tier12:
+        parts.append("**Tier I/II highlights** "
+                     f"({len(tier12)} call(s)):\n")
+        for r in tier12:
+            parts.append(f"- `{r.get('pair_id', '?')}` {r.get('class', '')} — "
+                         f"{r.get('biomarker', '')} "
+                         f"(Tier {r.get('amp_tier', '?')}) "
+                         f"{r.get('detail', '')}".rstrip())
+        parts.append("")
+    else:
+        parts.append("_No Tier I/II actionable calls in this cohort._\n")
+    return "\n".join(parts)
+
+
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
@@ -306,6 +363,7 @@ def main() -> int:
     ap.add_argument("--ascat", help="ASCAT cohort purity/ploidy table")
     ap.add_argument("--ecdna", help="ecDNA cohort counts table (AmpliconClassifier)")
     ap.add_argument("--msi", help="MSI cohort table (BH-corrected)")
+    ap.add_argument("--clinical", help="cohort clinical interpretation table")
     ap.add_argument("--rna-qc")
     ap.add_argument("--scrna-metrics")
     ap.add_argument("--methods", help="methods Markdown fragment")
@@ -367,6 +425,11 @@ def main() -> int:
                       "reported_pct", "bh_unstable", "bh_pct",
                       "uint16_saturated", "msi_status_wgs", "msi_status_wes"]))
             parts.append(msi_notes(rows))
+
+    if args.clinical:
+        parts.append(clinical_markdown(args.clinical,
+                                       title="Clinical interpretation "
+                                             "(actionable biomarkers & therapy context)"))
 
     if args.notes and Path(args.notes).exists():
         parts.append("### Cohort-specific findings\n")

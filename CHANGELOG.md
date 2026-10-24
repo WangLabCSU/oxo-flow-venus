@@ -5,6 +5,37 @@ All notable changes to Venus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Clinical interpretation module (issue #28): `rules/clinical.oxoflow` +
+  `envs/clinical/pixi.toml` (python/pandas/pysam/bcftools) turn the existing
+  somatic outputs into actionable per-patient evidence.
+  `clinical_snv_annotate` joins gnomAD AF + ClinVar (GRCh38 coordinates,
+  bcftools) onto the PASS+VEP VCF and tiers it against the CIViC monthly dump
+  (`scripts/clinical_tier.py`; build-independent matching — gene+protein
+  change, ClinVar VariationID bridge — because CIViC coordinates are GRCh37;
+  AMP tiers via the VICC meta-knowledgebase mapping, assertion
+  `amp_category` passthrough when present). `clinical_cnv_genes` maps the
+  CNVkit call.cns onto a curated actionability gene panel with ecDNA
+  cross-flags; `clinical_sv_fusions_{paired,tumoronly}` screen Manta SV
+  against a curated fusion-pair table; `clinical_biomarkers_{paired,tumoronly}`
+  merge SNV/CNV/SV + TMB/MSI/signatures into per-patient biomarker and
+  therapy tables (CIViC evidence + curated NMPA/CSCO context table);
+  `clinical_cohort` collects `report/clinical_cohort.tsv`.
+  Optional OncoKB enrichment (`clinical_oncokb` rule, REST API) activates via
+  `--arg oncokb_token=<token>` (free academic
+  registration); without a token a passthrough companion keeps the downstream
+  contract. New `[config]` keys: `clinical_kb_tag`, `civic_*_tsv`,
+  `clinvar_vcf`, `oncokb_token`. `scripts/prepare_clinical_kb.sh` downloads
+  the KB dumps host-side (GraphQL release discovery; refdata.md §10);
+  `verify_refdata.sh` checks them (WARN-only until deployed).
+  `clinical_report.py` gains a `--clinical` section (Tier I/II highlights +
+  putative-somatic disclaimers); `methods_from_rule_runs.py` cites
+  bcftools/CIViC/OncoKB. Repo-tracked panels:
+  `resources/clinical/{nmpa_oncology_approvals,actionable_fusion_pairs,
+  actionable_cnv_genes}.tsv`.
+
 ## [0.5.0] - 2026-10-24
 
 ### Added
