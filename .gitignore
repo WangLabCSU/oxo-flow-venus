@@ -14,3 +14,8 @@ results/
 *.fastq.gz
 *.fq.gz
 scripts/__pycache__/
+# Materialized pixi envs live OUTSIDE git — the repo ships only
+# envs/<module>/pixi.toml + pixi.lock (issue #26). Materialize with
+# scripts/bootstrap_envs.sh; never commit or pip-install into these.
+envs/*/.pixi/
+/.pixi/

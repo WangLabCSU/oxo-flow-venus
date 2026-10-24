@@ -46,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reference re-annotation) with the cnvkit 0.9.14 flag-conflict evidence.
 
 ### Fixed
+- Issue #26 (23G of materialized pixi envs shipped inside repo working
+  trees): the repo now ships lock-only env specs and materialization is
+  an explicit, idempotent step — `scripts/bootstrap_envs.sh` (all
+  modules or a prefix, safe to re-run after lock changes). `.gitignore`
+  covers `envs/*/.pixi/` and the repo-root `.pixi/` cache; README gains
+  an environment-lifecycle section (bootstrap to run, keep checkouts
+  lock-only, never pip-install at rule runtime — cross-ref #23). Ops-side
+  shared-store layout is documented as a runbook item pending
+  Traitome/oxo-flow#899 include pinning.
 - Issue #23 (ampliconsuite perpetual self-invalidation): the rule
   pip-installed mosek into its own pixi env at rule runtime, mutating the
   env away from the committed pixi.lock; the engine's env fingerprint then

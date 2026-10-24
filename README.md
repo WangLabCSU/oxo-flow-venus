@@ -87,6 +87,35 @@ config/pairs.tsv     # tumor/control pairing (control may be empty for tumor-onl
 config/groups.tsv    # sample groups + assay metadata (DNA, bulkRNA, scRNA)
 ```
 
+## Environments: materialize with bootstrap_envs.sh (issue #26)
+
+The repo ships only `envs/<mod>/pixi.toml` + `pixi.lock` (~1MB); the
+materialized environments (`envs/<mod>/.pixi/envs/default`, several GB per
+module) are **not** part of the repo and must not be committed, copied, or
+rsync'd around with it. Lifecycle:
+
+```bash
+# fresh clone / fresh vendored workdir — materialize all module envs:
+scripts/bootstrap_envs.sh
+# after any pixi.toml / pixi.lock change — idempotent re-sync:
+scripts/bootstrap_envs.sh            # or one module: scripts/bootstrap_envs.sh amplicon
+```
+
+Rules:
+
+- `pixi.lock` is the single source of truth. **Never `pip install` into a
+  module env at rule runtime** — that drifts the env from its lock and the
+  engine's env fingerprint then re-invalidates the rule on every run
+  (observed with mosek in the amplicon env, issue #23; mosek now lives in
+  the lock as a `[pypi-dependencies]` entry).
+- Run workdirs need materialized envs to execute; checkouts (the portal
+  copy, mirrors, backups) do not — keep checkouts lock-only and bootstrap
+  only where you run. A checkout that accumulated a materialized `.pixi`
+  tree should have it deleted (re-bootstrap on demand); the same class of
+  env-drift risk motivated the deletion-by-default policy.
+- `.gitignore` covers `envs/*/.pixi/` and the repo-root `.pixi/` cache so
+  `git status` stays clean even where envs were materialized.
+
 ## Extending venus with a new module
 
 A module is one rule fragment plus one environment; nothing else changes:
