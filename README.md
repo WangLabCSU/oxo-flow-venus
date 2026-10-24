@@ -11,6 +11,8 @@
 | Somatic calling | GATK Mutect2 (per-chromosome scatter) + FilterMutectCalls with orientation-bias priors | per-pair VCF (PASS), `stats`, MAF |
 | Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
 | CNV | CNVkit (`cnv_method`, default `wgs`; `--reference` for tumor-only) | per-pair CNV profiles |
+| ASCAT | ASCAT 3.2 + alleleCounter (paired only) | purity/ploidy fit per pair, `ascat/cohort_ascat.tsv` |
+| ecDNA | AmpliconSuite-pipeline (CNVkit seed intervals → AmpliconArchitect → AmpliconClassifier; tumor BAM only) | `ecdna/<pair>/` classification TSVs, `report/cohort_ecdna.tsv` |
 | SV | Manta (paired somatic + tumor-only candidates; `--exome` for WES) | `deliver/{pair}.sv.vcf.gz` (PASS, paired) or `deliver/{pair}.sv.candidate.vcf.gz` (unscored, tumor-only) |
 | MSI | MSIsensor-pro (paired only) | `deliver/{pair}.msi.tsv` |
 | Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
@@ -21,7 +23,7 @@
 Analysis modes:
 - **Paired tumor–normal** (`pairs.tsv` with a control sample) — Mutect2 tumor/normal, CNVkit `--normal`.
 - **Tumor-only** (empty control column) — Mutect2 without `-normal`, CNVkit with a prebuilt normal `.cnn` reference. Gating is per-pair via `when = "wildcard.control != ''"`, so a single cohort may mix both modes. Tumor-only calls still consume the germline resource AND the configured PoN (`config.pon`, default the bundled 1000G panel — override with a cohort PoN via `--arg pon=...` once ≥10 normals are available); declare any PoN used in the methods report.
-- **Tumor-only cohort** (every pair has an empty control) — set `--arg tumor_only=true`. The paired-only cohort rules then redirect to header-only tumor-only companions sharing their output paths: `ascat_cohort` → `ascat_cohort_tumoronly`, `msi_cohort` → `msi_cohort_tumoronly` (ASCAT and MSIsensor-pro are paired-only analyses; the report renders their sections as "no data"). Without the flag the cohort rules fail on unproducible per-pair inputs (ascat_paired / msi_paired are never instantiated).
+- **Tumor-only cohort** (every pair has an empty control) — set `--arg tumor_only=true`. The paired-only cohort rules then redirect to header-only tumor-only companions sharing their output paths: `ascat_cohort` → `ascat_cohort_tumoronly`, `msi_cohort` → `msi_cohort_tumoronly` (ASCAT and MSIsensor-pro are paired-only analyses; the report renders their sections with explicit "not run" statements rather than empty tables). Without the flag the cohort rules fail on unproducible per-pair inputs (ascat_paired / msi_paired are never instantiated).
 - **Mixed cohort caveat** — some pairs with a control, some without: per-pair rules self-gate via `wildcard.control`, but the cohort aggregations (`ascat_cohort`, `msi_cohort`) fan out over `config.pairs_list` and still reference the unproducible per-pair inputs of the tumor-only pairs. There is no injected list of paired-only pairs to expand over (engine limitation), so a mixed cohort currently requires running the paired and tumor-only chains as separate cohorts or waiting on engine support for paired-only pair lists.
 - **WGS vs WES/panel** — set `target_bed` to the capture intervals for WES/panel, plus `mutect_target_args`, `cnv_method`, `cnv_targets_args`, `sv_exome_args`, and `tmb_target_args` per the checklist below; leave empty for WGS.
 

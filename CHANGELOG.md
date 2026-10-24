@@ -5,7 +5,7 @@ All notable changes to Venus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-10-24
 
 ### Added
 - ecDNA / focal-amplification module (issue #19) wrapping AmpliconSuite-
@@ -88,7 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty. The versions-mining loop skips non-dict checkpoint entries
   instead of crashing. Verified with a 16-check fixture suite (both cohort
   modes) plus a full regeneration from the real GC01 checkpoint (rotated
-  rows 33 -> 7, all remaining absent for the right reason).
+  rows 33 -> 7, all remaining absent for the right reason). Follow-up:
+  strip the `set -euo pipefail` shell prelude after the bash -c unwrap and
+  scan inner multi-statement scripts for the .py/.R tool token (per-instance
+  rules like `tmb_per_pair` previously resolved to the tool "set").
 - Issue #17 (empty gene column in CNVkit outputs): root cause is the
   reference `.cnn` being built without `--annotate`; the gene column flows
   reference → target bed → coverage → fix → `.cnr/.cns` unchanged, so
