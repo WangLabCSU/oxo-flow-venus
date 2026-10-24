@@ -55,7 +55,9 @@ def main():
     # --- SNV/indel evidence ---
     if snv.empty:
         biomarkers.append({"class": "SNV/indel", "biomarker": "not_run",
-                           "amp_tier": "", "detail": "no SNV evidence table"})
+                           "amp_tier": "", "detail": "no SNV evidence table",
+                           "evidence": "", "therapies_civic": "",
+                           "clinvar_sig": "", "caveat": ""})
     else:
         keep = snv[snv["amp_tier"].isin(["I", "II", "IV"]) | snv["civic_variant_id"].astype(bool)]
         for _, r in keep.iterrows():
@@ -76,7 +78,9 @@ def main():
     # --- CNV gene calls ---
     if cnv.empty:
         biomarkers.append({"class": "CNV", "biomarker": "no_panel_calls",
-                           "amp_tier": "", "detail": "no actionable CNV gene call"})
+                           "amp_tier": "", "detail": "no actionable CNV gene call",
+                           "evidence": "", "therapies_civic": "",
+                           "clinvar_sig": "", "caveat": ""})
     else:
         for _, r in cnv.iterrows():
             ec = f" + ecDNA evidence" if r.get("ecDNA_evidence") == "yes" else ""
@@ -93,7 +97,9 @@ def main():
     # --- Fusion candidates ---
     if sv.empty:
         biomarkers.append({"class": "SV/fusion", "biomarker": "no_panel_candidates",
-                           "amp_tier": "", "detail": "no actionable fusion candidate"})
+                           "amp_tier": "", "detail": "no actionable fusion candidate",
+                           "evidence": "", "therapies_civic": "",
+                           "clinvar_sig": "", "caveat": ""})
     else:
         for _, r in sv.iterrows():
             biomarkers.append({
@@ -163,7 +169,7 @@ def main():
             "caveat": "context only (e.g. SBS17 = oxidative/gastric)" if "SBS17" in detail else "",
         })
 
-    bm = pd.DataFrame(biomarkers)
+    bm = pd.DataFrame(biomarkers).fillna("")
     if not bm.empty:
         bm["_o"] = bm["amp_tier"].map(TIER_ORDER)
         bm = bm.sort_values(["_o", "class", "biomarker"]).drop(columns="_o")
