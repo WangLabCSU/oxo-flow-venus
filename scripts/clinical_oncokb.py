@@ -57,6 +57,11 @@ def main():
                          f"check token validity; leaving columns empty\n")
         df.to_csv(args.out, sep="\t", index=False)
         sys.exit(0)
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        sys.stderr.write(f"[clinical_oncokb] API unreachable ({exc}) — "
+                         f"leaving columns empty; CIViC layer unaffected\n")
+        df.to_csv(args.out, sep="\t", index=False)
+        sys.exit(0)
 
     for (idx, _), res in zip(todo.iterrows(), results):
         if not isinstance(res, dict):

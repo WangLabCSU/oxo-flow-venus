@@ -34,7 +34,9 @@ def main():
         frames.append(df)
     if skipped:
         sys.stderr.write(f"[clinical_cohort] no biomarkers for: {', '.join(skipped)}\n")
-    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    cols = ["pair_id", "class", "biomarker", "amp_tier", "detail",
+            "evidence", "therapies_civic", "clinvar_sig", "caveat"]
+    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=cols)
     if not out.empty:
         out["_o"] = out["amp_tier"].map(TIER_ORDER)
         out = out.sort_values(["_o", "pair_id", "class"]).drop(columns="_o")

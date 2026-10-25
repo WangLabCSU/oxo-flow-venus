@@ -299,6 +299,7 @@ python {config.venus_tools}/clinical_interpret.py \
 [[rules]]
 name = "clinical_cohort"
 description = "Collect per-pair biomarker tables into the cohort clinical table"
+input = ["config/pairs.tsv"]
 expand_inputs = [
     { pattern = "report/clinical/{pair_id}.biomarkers.tsv", variables = { pair_id = "config.pairs_list" } },
 ]

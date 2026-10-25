@@ -58,11 +58,23 @@ def main():
                      f"{len(spans)}/{len(genes)}\n")
 
     vcf = pysam.VariantFile(args.vcf)
+    # Manta emits each BND twice (record + MATEID mirror). Mate positions are
+    # shifted by HOMLEN/CIPOS, so exact coordinate pairs cannot dedupe them —
+    # link via INFO/MATEID instead: skip any record whose ID was claimed as
+    # another record's mate. Coordinate-pair dedupe stays as fallback for
+    # callers that emit no MATEID.
+    mate_ids = set()
+    for rec in vcf.fetch():
+        mate = rec.info.get("MATEID")
+        if mate:
+            mate_ids.add(mate[0] if isinstance(mate, (list, tuple)) else mate)
     seen_bnd = set()
     rows = []
     for rec in vcf.fetch():
         if (rec.info.get("SVTYPE") or "") != "BND":
             continue
+        if rec.id and rec.id in mate_ids:
+            continue  # this record is the mirror of an earlier one
         m = BND_RE.search(rec.alts[0] or "")
         if not m:
             continue
@@ -70,7 +82,6 @@ def main():
         g2 = gene_at(spans, m.group(1), int(m.group(2)))
         if not g1 and not g2:
             continue
-        # Manta emits each BND twice (record + MATEID mirror); keep one.
         key = tuple(sorted([f"{rec.chrom}:{rec.pos}", f"{m.group(1)}:{m.group(2)}"]))
         if key in seen_bnd:
             continue

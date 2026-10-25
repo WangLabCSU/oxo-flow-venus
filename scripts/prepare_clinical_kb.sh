@@ -16,8 +16,36 @@ KB_DIR="${CLINICAL_KB_DIR:-/home/data/reference/clinical_kb}"
 API="https://civicdb.org/api/graphql"
 CLINVAR_BASE="https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38"
 
+print_config() {
+  echo "[prepare_clinical_kb] done. Contents of $KB_DIR:"
+  ls -la "$KB_DIR"
+  echo
+  echo "Update venus.oxoflow [config]:"
+  echo "  clinical_kb_tag = \"CIViC_$TAG\""
+  echo "  civic_variant_tsv   = \"$KB_DIR/${TAG}-VariantSummaries.tsv\""
+  echo "  civic_evidence_tsv  = \"$KB_DIR/${TAG}-AcceptedClinicalEvidenceSummaries.tsv\""
+  echo "  civic_assertion_tsv = \"$KB_DIR/${TAG}-AcceptedAssertionSummaries.tsv\""
+  echo "  clinvar_vcf         = \"$KB_DIR/clinvar.chr.vcf.gz\""
+}
+
 mkdir -p "$KB_DIR"
 cd "$KB_DIR"
+
+# Fast path: everything already deployed for the CURRENT tag — skip discovery
+# and downloads entirely (also makes offline re-runs and cron no-ops safe).
+CIVIC_TAG_FILE="$KB_DIR/.civic_tag"
+if [ -s "$CIVIC_TAG_FILE" ] && grep -q . "$CIVIC_TAG_FILE"; then
+  EXISTING_TAG=$(cat "$CIVIC_TAG_FILE")
+  if [ -s "${EXISTING_TAG}-VariantSummaries.tsv" ] \
+     && [ -s "${EXISTING_TAG}-AcceptedClinicalEvidenceSummaries.tsv" ] \
+     && [ -s "${EXISTING_TAG}-AcceptedAssertionSummaries.tsv" ] \
+     && [ -s clinvar.vcf.gz ] && [ -s clinvar.chr.vcf.gz ]; then
+    TAG="$EXISTING_TAG"
+    echo "[prepare_clinical_kb] KB already complete for tag $TAG — nothing to do"
+    print_config
+    exit 0
+  fi
+fi
 
 echo "[prepare_clinical_kb] discovering latest CIViC monthly release..."
 CIVIC_JSON=$(curl -sSL --retry 3 "$API" -H 'Content-Type: application/json' \
@@ -67,12 +95,7 @@ if [ ! -s clinvar.chr.vcf.gz ]; then
   bcftools index -f -t clinvar.chr.vcf.gz
 fi
 
-echo "[prepare_clinical_kb] done. Contents of $KB_DIR:"
-ls -la
-echo
-echo "Update venus.oxoflow [config]:"
-echo "  clinical_kb_tag = \"CIViC_$TAG\""
-echo "  civic_variant_tsv   = \"$KB_DIR/${TAG}-VariantSummaries.tsv\""
-echo "  civic_evidence_tsv  = \"$KB_DIR/${TAG}-AcceptedClinicalEvidenceSummaries.tsv\""
-echo "  civic_assertion_tsv = \"$KB_DIR/${TAG}-AcceptedAssertionSummaries.tsv\""
-echo "  clinvar_vcf         = \"$KB_DIR/clinvar.chr.vcf.gz\""
+# Record which CIViC tag this directory is complete for (fast-path key).
+echo -n "$TAG" > "$CIVIC_TAG_FILE"
+print_config
+

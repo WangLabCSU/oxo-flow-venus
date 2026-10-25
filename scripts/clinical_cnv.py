@@ -81,16 +81,22 @@ def main():
         best_amp = hit.loc[hit.log2.idxmax()] if len(hit) else None
         best_del = hit.loc[hit.log2.idxmin()] if len(hit) else None
         call, log2, cn, segdesc = "", "", "", ""
-        if best_amp is not None and best_amp.log2 >= args.amp_log2 \
-                and ("cn" not in hit.columns or int(best_amp.get("cn", 0)) >= args.amp_cn):
+        amp_ok = best_amp is not None and best_amp.log2 >= args.amp_log2 \
+            and ("cn" not in hit.columns
+                 or pd.to_numeric(best_amp.get("cn"), errors="coerce") >= args.amp_cn)
+        del_ok = best_del is not None and best_del.log2 <= args.del_log2
+        if amp_ok:  # amplification wins when a gene span touches both
             length_mb = (best_amp.end - best_amp.start) / 1e6
             call = "focal_amplification" if length_mb <= args.focal_mb else "amplification"
-            log2, cn = round(float(best_amp.log2), 3), int(best_amp.get("cn", 0))
+            log2 = round(float(best_amp.log2), 3)
+            cn = int(pd.to_numeric(best_amp.get("cn"), errors="coerce") or 0)
             segdesc = f"{best_amp.chromosome}:{best_amp.start}-{best_amp.end}({length_mb:.2f}Mb)"
-        if best_del is not None and best_del.log2 <= args.del_log2:
+        elif del_ok:
             length_mb = (best_del.end - best_del.start) / 1e6
-            call = call or ("focal_deletion" if length_mb <= args.focal_mb else "deletion")
-            log2, cn = round(float(best_del.log2), 3), int(best_del.get("cn", 0))
+            call = "focal_deletion" if length_mb <= args.focal_mb else "deletion"
+            log2 = round(float(best_del.log2), 3)
+            cn = int(pd.to_numeric(best_del.get("cn"), errors="coerce") or 0) \
+                if pd.notna(best_del.get("cn")) else ""
             segdesc = f"{best_del.chromosome}:{best_del.start}-{best_del.end}({length_mb:.2f}Mb)"
         if not call:
             continue

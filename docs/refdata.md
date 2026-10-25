@@ -236,6 +236,8 @@ Deployed at `/home/data/reference/clinical_kb/` (override with
 | `<TAG>-AcceptedClinicalEvidenceSummaries.tsv` | same release | monthly |
 | `<TAG>-AcceptedAssertionSummaries.tsv` | same release (carries `amp_category` — the AMP tier backbone) | monthly |
 | `clinvar.vcf.gz` (+`.tbi`) | NCBI `ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/` | weekly |
+| **`clinvar.chr.vcf.gz` (+`.tbi`)** | **derived locally**: contigs renamed `1`→`chr1` etc. (`bcftools annotate --rename-chrs`) — **this is the file `config.clinvar_vcf` points at**; NCBI's unprefixed contigs would make the join silently empty | rebuilt by the prep script when `clinvar.vcf.gz` updates |
+| `.civic_tag` | marker written by the prep script (which CIViC tag this directory is complete for; fast-path key) | per refresh |
 
 Download/refresh is one command — `scripts/prepare_clinical_kb.sh` discovers
 the latest CIViC monthly release via the public GraphQL API, downloads the

@@ -16,7 +16,11 @@ AMP tiers follow the VICC meta-knowledgebase mapping (Wagner et al., Nat Genet
 otherwise evidence level A->Tier I-A, B->I-B, C->II-C, D->II-D, E->III;
 benign-only assertion -> Tier IV; unmatched protein-altering -> Tier III.
 
-Output: long TSV, one row per protein-altering/matched PASS variant.
+Output: long TSV, one row per protein-altering or KB-matched PASS variant.
+Matching is substitution-centric: missense/nonsense protein changes get exact
+keys; in-frame indels/delins (e.g. EGFR E746_A750del, MET exon-14 skips) have
+no portable protein key yet and currently match only via ClinVar VariationID —
+a known recall gap, disclosed here and in docs/refdata.md §10.
 Stdlib + pandas + pysam; CSQ subfield order read from the VCF header
 (same contract as scripts/vcf2maf_light.py).
 """
@@ -142,7 +146,8 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
         for cid in clinv:
             by_clinvar.setdefault(cid, vid)
         if build == "GRCh38" and coord[0] and coord[1] and coord[3] and coord[4]:
-            by_coord[(coord[0], coord[1], coord[3], coord[4])] = vid
+            # normalize away chr prefixes on both sides (CIViC rows use "1")
+            by_coord[(coord[0].removeprefix("chr"), coord[1], coord[3], coord[4])] = vid
     return variants, by_protein, by_clinvar, by_coord
 
 
@@ -217,8 +222,8 @@ def main():
             vid, basis = hit, f"protein:{gene}:{hgvsp}"
         elif clinvar_id and clinvar_id in by_clinvar:
             vid, basis = by_clinvar[clinvar_id], f"clinvar:{clinvar_id}"
-        elif (rec.chrom, str(rec.pos), rec.ref, rec.alts[0]) in by_coord:
-            vid = by_coord[(rec.chrom, str(rec.pos), rec.ref, rec.alts[0])]
+        elif (rec.chrom.removeprefix("chr"), str(rec.pos), rec.ref, rec.alts[0]) in by_coord:
+            vid = by_coord[(rec.chrom.removeprefix("chr"), str(rec.pos), rec.ref, rec.alts[0])]
             basis = "grch38_coord"
         base = {
             "chrom": rec.chrom, "pos": rec.pos, "ref": rec.ref, "alt": rec.alts[0],
@@ -227,7 +232,14 @@ def main():
             "clinvar_sig": clinvar_sig, "kb_tag": args.kb_tag,
         }
         if vid is None:
-            if not hgvsp:  # no protein change and no KB match -> skip silently
+            if not hgvsp:
+                if not cons.startswith("splice") and cons != "transcript_ablation":
+                    continue  # no protein change, no KB match, no mechanism note
+                rows.append({**base, "civic_variant_id": "", "civic_variant": "",
+                             "civic_evidence_levels": "", "civic_evidence_types": "",
+                             "civic_therapies": "", "civic_diseases": "",
+                             "amp_tier": "", "amp_level": "", "evidence_source": "",
+                             "tier_basis": "non_protein_mechanism"})
                 continue
             rows.append({**base, "civic_variant_id": "", "civic_variant": "",
                          "civic_evidence_levels": "", "civic_evidence_types": "",
@@ -236,11 +248,16 @@ def main():
                          "tier_basis": "no_kb_match"})
             continue
         v = variants[vid]
+        # a benign-only assertion must not erase an actionable tier from the
+        # same variant; flip to IV only when nothing actionable was derived
+        tier = v["amp_tier"]
+        if v["benign"] and not tier:
+            tier = "IV"
         rows.append({**base, "civic_variant_id": vid, "civic_variant": v["civic_variant"],
                      "civic_evidence_levels": v["evidence_levels"],
                      "civic_evidence_types": v["evidence_types"],
                      "civic_therapies": v["therapies"], "civic_diseases": v["diseases"],
-                     "amp_tier": "IV" if v["benign"] else v["amp_tier"],
+                     "amp_tier": tier,
                      "amp_level": v["amp_level"],
                      "evidence_source": "CIViC:" + (v["amp_raw"] or v["evidence_levels"]),
                      "tier_basis": basis})

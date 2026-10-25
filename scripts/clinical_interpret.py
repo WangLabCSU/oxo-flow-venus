@@ -87,7 +87,7 @@ def main():
             biomarkers.append({
                 "class": "CNV",
                 "biomarker": f"{r['gene']} {r['call']}",
-                "amp_tier": "II" if "amplification" in r["call"] else "II",
+                "amp_tier": "II",
                 "detail": f"{r['segment']} log2={r['segment_log2']} cn={r['segment_cn']}{ec}",
                 "evidence": "CNVkit+panel",
                 "therapies_civic": "",
@@ -198,7 +198,9 @@ def main():
                 "kb_tag": args.kb_tag,
             })
 
-    th = pd.DataFrame(therapies)
+    th = pd.DataFrame(therapies, columns=[
+        "biomarker", "therapy", "target_or_context", "region_or_approval",
+        "line_or_level", "source", "kb_tag"])
     th.to_csv(args.out_therapies, sep="\t", index=False)
     sys.stderr.write(f"[clinical_interpret] {len(bm)} biomarkers, "
                      f"{len(th)} therapy rows -> {args.out_biomarkers}\n")

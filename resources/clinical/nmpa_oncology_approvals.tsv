@@ -16,6 +16,9 @@ PIK3CA E545K/H1047R	PIK3CA	alpelisib (+ endocrine)	PIK3CA-mutated breast cancer	
 MDM2 amplification	MDM2	MDM2 inhibitors (trasoundib/APG-115)	trial context	any	trial only	—	ecDNA-borne MDM2 amp = concurrency risk with ICI	2026-10
 EGFR amplification	EGFR	no established monotherapy	gastric cancer (trial context)	any	—	—	eg. necitumumab trials negative in GC	2026-10
 CCNE1 amplification	CCNE1	no approved targeted therapy	trial context (CDK2/PKMYT1 inhibitors)	any	trial only	—	often ecDNA-borne in CIN GC	2026-10
+ALK fusion	ALK	ALK inhibitors (alectinib/lorlatinib etc.)	ALK fusion-positive solid tumors	any	FDA (NSCLC); NMPA (NSCLC)	tissue-agnostic signal in trials	ALCandidateSV single-breakpoint hits need partner confirmation before therapy mapping	2026-10
+ROS1 fusion	ROS1	entrectinib / crizotinib / repotrectinib	ROS1 fusion-positive solid tumors	any	FDA (NSCLC); NMPA (crizotinib NSCLC)	—	tissue-agnostic NTRK-style framing; GC evidence limited	2026-10
+RET fusion	RET	selpercatinib / pralsetinib	RET fusion-positive solid tumors	any	FDA (NSCLC/thyroid); NMPA (selpercatinib NSCLC 2023)	—	—	2026-10
 BRAF V600E	BRAF	dabrafenib + trametinib	BRAF V600E solid tumors	—	FDA (NSCLC/anaplastic); CRC combo approved	trial context in GC	BRAF V600E <2% GC	2026-10
 NRAS Q61	NRAS	no approved therapy	trial context	any	—	—	resistance marker for EGFR/HER2 strategies	2026-10
 RHOA mutations (R5W etc.)	RHOA	no approved therapy	diffuse-type gastric cancer marker	—	—	—	prognostic/lineage marker only	2026-10
