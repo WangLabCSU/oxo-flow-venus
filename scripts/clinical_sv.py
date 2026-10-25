@@ -60,21 +60,19 @@ def main():
     vcf = pysam.VariantFile(args.vcf)
     # Manta emits each BND twice (record + MATEID mirror). Mate positions are
     # shifted by HOMLEN/CIPOS, so exact coordinate pairs cannot dedupe them —
-    # link via INFO/MATEID instead: skip any record whose ID was claimed as
-    # another record's mate. Coordinate-pair dedupe stays as fallback for
-    # callers that emit no MATEID.
-    mate_ids = set()
-    for rec in vcf.fetch():
-        mate = rec.info.get("MATEID")
-        if mate:
-            mate_ids.add(mate[0] if isinstance(mate, (list, tuple)) else mate)
+    # keep the FIRST record of each MATEID pair (second occurrence's mate was
+    # already emitted). Coordinate-pair dedupe stays as fallback for callers
+    # that emit no MATEID.
+    seen_ids = set()
     seen_bnd = set()
     rows = []
     for rec in vcf.fetch():
         if (rec.info.get("SVTYPE") or "") != "BND":
             continue
-        if rec.id and rec.id in mate_ids:
-            continue  # this record is the mirror of an earlier one
+        mate = rec.info.get("MATEID")
+        mate = mate[0] if isinstance(mate, (list, tuple)) else mate
+        if mate and mate in seen_ids:
+            continue  # mirror of an already-kept record
         m = BND_RE.search(rec.alts[0] or "")
         if not m:
             continue
@@ -86,6 +84,8 @@ def main():
         if key in seen_bnd:
             continue
         seen_bnd.add(key)
+        if rec.id:
+            seen_ids.add(rec.id)
         for _, p in pairs.iterrows():
             a, b = p["gene_5"], p["gene_3"]
             match = (g1 and g2 and {g1.upper(), g2.upper()} == {a.upper(), b.upper()}) \
