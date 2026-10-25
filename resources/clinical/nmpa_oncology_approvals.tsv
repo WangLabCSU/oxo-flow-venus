@@ -1,0 +1,22 @@
+biomarker	gene	therapy	cancer_context	line	approval_region	guideline_context	notes	as_of
+ERBB2 amplification/IHC3+	ERBB2	trastuzumab + chemo (FL/XELOX)	HER2-positive gastric/GEJ adenocarcinoma	1L	NMPA (2012 GC)	CSCO 2025 1A (pembrolizumab combo CPS>=1)	KEYNOTE-811 combo standard; HER2 high = IHC3+ or IHC2+/ISH+	2026-10
+ERBB2 amplification/IHC3+	ERBB2	trastuzumab deruxtecan (T-DXd)	HER2-positive gastric/GEJ adenocarcinoma	2L	NMPA (2026, DESTINY-Gastric04)	CSCO 2026 I级 1A; 3L NMPA 2024-08	only approved GC ADC in 2L	2026-10
+ERBB2 IHC2+/ISH- (HER2-low/mid)	ERBB2	disitamab vedotin (RC48)	gastric/GEJ adenocarcinoma	3L	NMPA (2021)	CSCO 2025 2A HER2 mid-expression	HER2 four-tier stratification since CSCO 2025	2026-10
+CLDN18.2 overexpression (IHC >=75% strong membrane)	CLDN18	zolbetuximab + FL/XP chemo	CLDN18.2+/HER2- gastric/GEJ adenocarcinoma	1L	NMPA (2024-12-31)	NCCN 2025 preferred 1L (category 1)	SPOTLIGHT/GLOW; ~35% Chinese GC CLDN18.2+	2026-10
+MSI-H / dMMR (any)	MSI	pembrolizumab	MSI-H/dMMR advanced solid tumors	>=2L	NMPA (pan-cancer)	CSCO 2025 GC 2L I级	tissue MSIsensor is paired-mode only in venus	2026-10
+MSI-H / dMMR (any)	MSI	nivolumab +/- ipilimumab	MSI-H/dMMR advanced gastric cancer	1L/2L	NMPA (nivo 1L GC 2021; CheckMate-8HW)	CSCO 2025 1L I级 (nivo+ipi 2B)	dMMR/MSI-H ~10% resectable GC	2026-10
+MSI-H / dMMR (any)	MSI	envolimab (ENV-101)	MSI-H/dMMR advanced solid tumors	>=2L	NMPA (2021)	—	domestic subcutaneous PD-L1	2026-10
+TMB-H (>=10 mut/Mb)	TMB	pembrolizumab	TMB-H advanced solid tumors	>=2L	FDA (2020, tissue TMB >=10 mut/Mb)	CSCO ICI guideline context	no NMPA pan-cancer TMB-H approval yet	2026-10
+NTRK1/2/3 fusion	NTRK1/2/3	larotrectinib / entrectinib	NTRK fusion-positive solid tumors	any	NMPA (larotrectinib 2022; entrectinib 2022)	—	rare in GC (<1%)	2026-10
+BRCA1/2 germline pathogenic	BRCA1/2	pamiparib (PARP)	germline BRCA+ HER2- gastric cancer	3L	NMPA (2021)	—	somatic BRCA/HRD in GC = trial context only	2026-10
+KRAS G12C	KRAS	sotorasib / adagrasib	KRAS G12C solid tumors	any	FDA (NSCLC/CRC); NMPA (NSCLC)	trial context in GC	KRAS G12C ~1-3% GC; CodeBreaK 100 GC activity	2026-10
+FGFR2 amplification	FGFR2	FGFR inhibitors (erdafitinib/pemigatinib)	trial context in FGFR2-amp gastric cancer	trial	FDA (other indications)	—	FGFR2-amp ~5% AGC, often ecDNA (Saito-Adachi 2023)	2026-10
+MET amplification	MET	MET inhibitors (savolitinib/capmatinib)	MET-amp gastric cancer	trial	NMPA (NSCLC), FDA (NSCLC)	VIKTORY-2 umbrella GC trial	secondary MET amp = post-ICI/TKI resistance context	2026-10
+PIK3CA E545K/H1047R	PIK3CA	alpelisib (+ endocrine)	PIK3CA-mutated breast cancer	—	FDA (breast); no GI approval	trial context in GC	co-actionable with ARID1A-loss biology	2026-10
+MDM2 amplification	MDM2	MDM2 inhibitors (trasoundib/APG-115)	trial context	any	trial only	—	ecDNA-borne MDM2 amp = concurrency risk with ICI	2026-10
+EGFR amplification	EGFR	no established monotherapy	gastric cancer (trial context)	any	—	—	eg. necitumumab trials negative in GC	2026-10
+CCNE1 amplification	CCNE1	no approved targeted therapy	trial context (CDK2/PKMYT1 inhibitors)	any	trial only	—	often ecDNA-borne in CIN GC	2026-10
+BRAF V600E	BRAF	dabrafenib + trametinib	BRAF V600E solid tumors	—	FDA (NSCLC/anaplastic); CRC combo approved	trial context in GC	BRAF V600E <2% GC	2026-10
+NRAS Q61	NRAS	no approved therapy	trial context	any	—	—	resistance marker for EGFR/HER2 strategies	2026-10
+RHOA mutations (R5W etc.)	RHOA	no approved therapy	diffuse-type gastric cancer marker	—	—	—	prognostic/lineage marker only	2026-10
+ARID1A loss	ARID1A	no approved therapy; ICI-enrichment signal	trial context	any	—	—	ARID1A-mut GC elevated VEGFA/CLDN18 expression	2026-10

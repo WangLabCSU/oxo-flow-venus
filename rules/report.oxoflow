@@ -233,6 +233,7 @@ input = [
     "ascat/cohort_ascat.tsv",
     "report/cohort_ecdna.tsv",
     "report/msi_cohort.tsv",
+    "report/clinical_cohort.tsv",
 ]
 output = [
     "report/venus_clinical_report.md",
@@ -257,6 +258,7 @@ python {config.venus_tools}/clinical_report.py \
     --ascat {input[5]} \
     --ecdna {input[6]} \
     --msi {input[7]} \
+    --clinical {input[8]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \

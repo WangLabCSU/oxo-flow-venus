@@ -56,6 +56,16 @@ TOOL_META = {
         "AmpliconSuite",
         "Deshpande et al. 2022, Nat Biotechnol",
     ),
+    "bcftools": ("bcftools", "Danecek et al. 2021, Gigascience (ClinVar/gnomAD joins)"),
+    "clinical_tier.py": (
+        "CIViC tiering",
+        "CIViC monthly dump (CC0); AMP tiers per VICC meta-knowledgebase, "
+        "Wagner et al. 2020, Nat Genet",
+    ),
+    "clinical_oncokb.py": (
+        "OncoKB",
+        "Chakravarty et al. 2017, JCO PO (academic API, token-gated)",
+    ),
 }
 
 # Versions verified from pipeline-run artifacts (BAM @PG VN records, per-run
@@ -79,6 +89,8 @@ VERIFIED_VERSIONS = [
     ("featureCounts", "2.1.1 (subread)", "featurecounts log banner"),
     ("vep-rs", "115.2", "vep run log (Ensembl VEP (Rust) banner)"),
     ("dnbc4tools", "3.0", "scrna run log (--version)"),
+    ("bcftools", ">=1.21", "pixi env (bioconda); clinical joins"),
+    ("CIViC", "monthly dump (kb_tag in report)", "report/clinical/kb_versions.tsv"),
 ]
 
 INTERPRETERS = {"python3", "python", "Rscript", "bash", "sh", "/bin/bash"}

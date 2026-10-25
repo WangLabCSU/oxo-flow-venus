@@ -1,0 +1,14 @@
+# Venus clinical interpretation environment — CIViC/ClinVar annotation,
+# AMP tiering and therapy matching (bcftools joins + pandas/pysam parsing).
+[workspace]
+name = "venus-clinical"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.11"
+pandas = ">=2"
+pysam = ">=0.22"
+bcftools = ">=1.21"
+htslib = ">=1.21"
+requests = ">=2.31"

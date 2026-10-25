@@ -1,0 +1,317 @@
+[workflow]
+name = "venus-clinical"
+description = "Clinical interpretation: CIViC/ClinVar annotation -> AMP tiering -> therapy matching"
+
+# ---------------------------------------------------------------------------
+# Knowledgebase provenance gate. Fails loudly if the host KB dumps are absent
+# (prepare via scripts/prepare_clinical_kb.sh; see docs/refdata.md). The tag
+# travels into every evidence row and the report.
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_kb_prep"
+description = "Verify CIViC/ClinVar knowledgebase dumps and record versions"
+input = [
+    "{config.civic_variant_tsv}",
+    "{config.civic_evidence_tsv}",
+    "{config.civic_assertion_tsv}",
+    "{config.clinvar_vcf}",
+    "{config.clinvar_vcf}.tbi",
+]
+output = ["report/clinical/kb_versions.tsv"]
+# Keep: tiny provenance table consumed by the report.
+protected_output = ["report/clinical/kb_versions.tsv"]
+threads = 1
+memory = "1G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+shell = """
+mkdir -p report/clinical logs && \
+printf 'kb_tag\\tcivic_variant_tsv\\tcivic_evidence_tsv\\tcivic_assertion_tsv\\tclinvar_vcf\\n' \
+    > report/clinical/kb_versions.tsv && \
+printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \
+    '{config.clinical_kb_tag}' '{config.civic_variant_tsv}' \
+    '{config.civic_evidence_tsv}' '{config.civic_assertion_tsv}' \
+    '{config.clinvar_vcf}' >> report/clinical/kb_versions.tsv && \
+echo "[clinical_kb_prep] KB tag {config.clinical_kb_tag} verified"
+"""
+
+# ---------------------------------------------------------------------------
+# SNV/indel: join gnomAD AF + ClinVar (coordinate/ID, GRCh38) onto the VEP
+# VCF, then extract evidence and tier against CIViC (build-independent
+# gene+protein / ClinVar-ID matching; see scripts/clinical_tier.py).
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_snv_annotate"
+description = "Annotate PASS+VEP VCF with gnomAD/ClinVar and tier vs CIViC"
+input = [
+    "deliver/{pair_id}.somatic.pass.vep.vcf.gz",
+    "{config.clinvar_vcf}",
+    "{config.civic_variant_tsv}",
+    "{config.civic_evidence_tsv}",
+    "{config.civic_assertion_tsv}",
+    "{config.gnomad}",
+]
+output = [
+    "report/clinical/{pair_id}.gnomad.vcf.gz",
+    "report/clinical/{pair_id}.annotated.vcf.gz",
+    "report/clinical/{pair_id}.annotated.vcf.gz.tbi",
+    "report/clinical/{pair_id}.snv_evidence.tsv",
+]
+# Keep: evidence table feeds biomarkers + report.
+protected_output = [
+    "report/clinical/{pair_id}.snv_evidence.tsv",
+]
+threads = 2
+memory = "16G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+shell = """
+mkdir -p report/clinical logs && \
+bcftools annotate -a {input[5]} -c INFO/AF \
+    -Oz -o {output[0]} {input[0]} \
+    2>> logs/clinical_snv_{pair_id}.log && \
+bcftools index -t -f {output[0]} && \
+bcftools annotate -a {input[1]} -c ID,INFO/CLNSIG,INFO/CLNDN,INFO/GENEINFO \
+    -Oz -o {output[1]} {output[0]} \
+    2>> logs/clinical_snv_{pair_id}.log && \
+tabix -f -p vcf {output[1]} && \
+python {config.venus_tools}/clinical_tier.py \
+    --vcf {output[1]} \
+    --civic-variant-tsv {input[2]} \
+    --civic-evidence-tsv {input[3]} \
+    --civic-assertion-tsv {input[4]} \
+    --kb-tag '{config.clinical_kb_tag}' \
+    --out {output[3]} \
+    2> logs/clinical_tier_{pair_id}.log
+"""
+
+# ---------------------------------------------------------------------------
+# Optional OncoKB enrichment (free academic token). The paired *_skip rules
+# produce a byte-copy of the CIViC-only table so downstream rules keep one
+# resolvable hard input regardless of whether a token is configured
+# (ascat_cohort/_tumoronly pattern).
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_oncokb"
+description = "OncoKB level/R1R2 enrichment of the SNV evidence table"
+input = ["report/clinical/{pair_id}.snv_evidence.tsv"]
+output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
+protected_output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
+threads = 1
+memory = "4G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "config.oncokb_token != ''"
+shell = """
+mkdir -p logs && \
+python {config.venus_tools}/clinical_oncokb.py \
+    --snv-evidence {input[0]} \
+    --token '{config.oncokb_token}' \
+    --out {output[0]} \
+    2> logs/clinical_oncokb_{pair_id}.log
+"""
+
+[[rules]]
+name = "clinical_oncokb_skip"
+description = "No OncoKB token: pass CIViC-only evidence through unchanged"
+input = ["report/clinical/{pair_id}.snv_evidence.tsv"]
+output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
+protected_output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
+threads = 1
+memory = "1G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "config.oncokb_token == ''"
+shell = """
+mkdir -p logs && \
+cp {input[0]} {output[0]} && \
+echo "[clinical_oncokb_skip] no oncokb_token configured; CIViC-only evidence" \
+    > logs/clinical_oncokb_{pair_id}.log
+"""
+
+# ---------------------------------------------------------------------------
+# CNV: gene-level focal amp/del calls for the actionability panel, cross-flag
+# ecDNA membership from AmpliconSuite.
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_cnv_genes"
+description = "Actionable CNV gene calls from CNVkit segments + ecDNA cross-flag"
+input = [
+    "cnv/{pair_id}/{pair_id}.call.cns",
+    "{config.gencode_gtf}",
+    "resources/clinical/actionable_cnv_genes.tsv",
+    "ecdna/{pair_id}/{pair_id}_gene_list.tsv",
+]
+output = ["report/clinical/{pair_id}.cnv_evidence.tsv"]
+protected_output = ["report/clinical/{pair_id}.cnv_evidence.tsv"]
+threads = 1
+memory = "8G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+shell = """
+mkdir -p report/clinical logs && \
+python {config.venus_tools}/clinical_cnv.py \
+    --cns {input[0]} \
+    --gtf {input[1]} \
+    --panel {input[2]} \
+    --ecdna-genes {input[3]} \
+    --out {output[0]} \
+    2> logs/clinical_cnv_{pair_id}.log
+"""
+
+# ---------------------------------------------------------------------------
+# SV: fusion candidates against the curated pair table. Paired cohorts use the
+# scored somaticSV delivery; tumor-only cohorts use candidateSV and the output
+# rows say so.
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_sv_fusions_paired"
+description = "Fusion candidates from scored somaticSV (paired cohorts)"
+input = [
+    "deliver/{pair_id}.sv.vcf.gz",
+    "{config.gencode_gtf}",
+    "resources/clinical/actionable_fusion_pairs.tsv",
+]
+output = ["report/clinical/{pair_id}.sv_evidence.tsv"]
+protected_output = ["report/clinical/{pair_id}.sv_evidence.tsv"]
+threads = 1
+memory = "8G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p report/clinical logs && \
+python {config.venus_tools}/clinical_sv.py \
+    --vcf {input[0]} \
+    --gtf {input[1]} \
+    --pairs {input[2]} \
+    --out {output[0]} \
+    2> logs/clinical_sv_{pair_id}.log
+"""
+
+[[rules]]
+name = "clinical_sv_fusions_tumoronly"
+description = "Fusion candidates from candidateSV (tumor-only cohorts; unscored)"
+input = [
+    "deliver/{pair_id}.sv.candidate.vcf.gz",
+    "{config.gencode_gtf}",
+    "resources/clinical/actionable_fusion_pairs.tsv",
+]
+output = ["report/clinical/{pair_id}.sv_evidence.tsv"]
+protected_output = ["report/clinical/{pair_id}.sv_evidence.tsv"]
+threads = 1
+memory = "8G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p report/clinical logs && \
+python {config.venus_tools}/clinical_sv.py \
+    --vcf {input[0]} \
+    --gtf {input[1]} \
+    --pairs {input[2]} \
+    --tumor-only \
+    --out {output[0]} \
+    2> logs/clinical_sv_{pair_id}.log
+"""
+
+# ---------------------------------------------------------------------------
+# Merge evidence streams into per-patient biomarkers + therapy tables. MSI is
+# only consumable with a matched normal, hence the paired/tumor-only split.
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_biomarkers_paired"
+description = "Merge SNV/CNV/SV/TMB/MSI/signatures into biomarker + therapy tables"
+input = [
+    "report/clinical/{pair_id}.snv_evidence.onco.tsv",
+    "report/clinical/{pair_id}.cnv_evidence.tsv",
+    "report/clinical/{pair_id}.sv_evidence.tsv",
+    "report/tmb/{pair_id}.tmb.tsv",
+    "report/signatures/{pair_id}.exposures.tsv",
+    "deliver/{pair_id}.msi.tsv",
+    "resources/clinical/nmpa_oncology_approvals.tsv",
+]
+output = [
+    "report/clinical/{pair_id}.biomarkers.tsv",
+    "report/clinical/{pair_id}.therapies.tsv",
+]
+protected_output = [
+    "report/clinical/{pair_id}.biomarkers.tsv",
+    "report/clinical/{pair_id}.therapies.tsv",
+]
+threads = 1
+memory = "4G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "wildcard.control != ''"
+shell = """
+mkdir -p report/clinical logs && \
+python {config.venus_tools}/clinical_interpret.py \
+    --patient '{pair_id}' \
+    --snv-evidence {input[0]} \
+    --cnv-evidence {input[1]} \
+    --sv-evidence {input[2]} \
+    --tmb {input[3]} \
+    --signatures {input[4]} \
+    --msi {input[5]} \
+    --nmpa {input[6]} \
+    --kb-tag '{config.clinical_kb_tag}' \
+    --out-biomarkers {output[0]} \
+    --out-therapies {output[1]} \
+    2> logs/clinical_biomarkers_{pair_id}.log
+"""
+
+[[rules]]
+name = "clinical_biomarkers_tumoronly"
+description = "Merge SNV/CNV/SV/TMB/signatures into biomarker + therapy tables (no MSI)"
+input = [
+    "report/clinical/{pair_id}.snv_evidence.onco.tsv",
+    "report/clinical/{pair_id}.cnv_evidence.tsv",
+    "report/clinical/{pair_id}.sv_evidence.tsv",
+    "report/tmb/{pair_id}.tmb.tsv",
+    "report/signatures/{pair_id}.exposures.tsv",
+    "resources/clinical/nmpa_oncology_approvals.tsv",
+]
+output = [
+    "report/clinical/{pair_id}.biomarkers.tsv",
+    "report/clinical/{pair_id}.therapies.tsv",
+]
+protected_output = [
+    "report/clinical/{pair_id}.biomarkers.tsv",
+    "report/clinical/{pair_id}.therapies.tsv",
+]
+threads = 1
+memory = "4G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+when = "wildcard.control == ''"
+shell = """
+mkdir -p report/clinical logs && \
+python {config.venus_tools}/clinical_interpret.py \
+    --patient '{pair_id}' \
+    --snv-evidence {input[0]} \
+    --cnv-evidence {input[1]} \
+    --sv-evidence {input[2]} \
+    --tmb {input[3]} \
+    --signatures {input[4]} \
+    --nmpa {input[5]} \
+    --kb-tag '{config.clinical_kb_tag}' \
+    --out-biomarkers {output[0]} \
+    --out-therapies {output[1]} \
+    2> logs/clinical_biomarkers_{pair_id}.log
+"""
+
+# ---------------------------------------------------------------------------
+# Cohort collection: report/clinical_cohort.tsv feeds clinical_report.py
+# (--clinical). Works identically in both cohort modes.
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "clinical_cohort"
+description = "Collect per-pair biomarker tables into the cohort clinical table"
+expand_inputs = [
+    { pattern = "report/clinical/{pair_id}.biomarkers.tsv", variables = { pair_id = "config.pairs_list" } },
+]
+output = ["report/clinical_cohort.tsv"]
+protected_output = ["report/clinical_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/clinical/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/clinical_cohort.py \
+    --pairs config/pairs.tsv \
+    --dir report/clinical \
+    --out {output[0]} \
+    2> logs/clinical_cohort.log
+"""
