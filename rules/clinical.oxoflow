@@ -66,19 +66,19 @@ memory = "16G"
 environment = { pixi = "envs/clinical/pixi.toml" }
 shell = """
 mkdir -p report/clinical logs && \
-bcftools annotate -a {input[5]} -c INFO/AF \
-    -Oz -o {output[0]} {input[0]} \
+bcftools annotate -a {input[6]} -c INFO/AF \
+    -Oz -o {output[0]} {input[1]} \
     2>> logs/clinical_snv_{pair_id}.log && \
 bcftools index -t -f {output[0]} && \
-bcftools annotate -a {input[1]} -c ID,INFO/CLNSIG,INFO/CLNDN,INFO/GENEINFO \
+bcftools annotate -a {input[2]} -c ID,INFO/CLNSIG,INFO/CLNDN,INFO/GENEINFO \
     -Oz -o {output[1]} {output[0]} \
     2>> logs/clinical_snv_{pair_id}.log && \
 tabix -f -p vcf {output[1]} && \
 python {config.venus_tools}/clinical_tier.py \
     --vcf {output[1]} \
-    --civic-variant-tsv {input[2]} \
-    --civic-evidence-tsv {input[3]} \
-    --civic-assertion-tsv {input[4]} \
+    --civic-variant-tsv {input[3]} \
+    --civic-evidence-tsv {input[4]} \
+    --civic-assertion-tsv {input[5]} \
     --kb-tag '{config.clinical_kb_tag}' \
     --out {output[3]} \
     2> logs/clinical_tier_{pair_id}.log
@@ -148,10 +148,10 @@ environment = { pixi = "envs/clinical/pixi.toml" }
 shell = """
 mkdir -p report/clinical logs && \
 python {config.venus_tools}/clinical_cnv.py \
-    --cns {input[0]} \
-    --gtf {input[1]} \
-    --panel {input[2]} \
-    --ecdna-genes {input[3]} \
+    --cns {input[1]} \
+    --gtf {input[2]} \
+    --panel {input[3]} \
+    --ecdna-genes {input[4]} \
     --out {output[0]} \
     2> logs/clinical_cnv_{pair_id}.log
 """
@@ -179,9 +179,9 @@ when = "wildcard.control != ''"
 shell = """
 mkdir -p report/clinical logs && \
 python {config.venus_tools}/clinical_sv.py \
-    --vcf {input[0]} \
-    --gtf {input[1]} \
-    --pairs {input[2]} \
+    --vcf {input[1]} \
+    --gtf {input[2]} \
+    --pairs {input[3]} \
     --out {output[0]} \
     2> logs/clinical_sv_{pair_id}.log
 """
@@ -204,9 +204,9 @@ when = "wildcard.control == ''"
 shell = """
 mkdir -p report/clinical logs && \
 python {config.venus_tools}/clinical_sv.py \
-    --vcf {input[0]} \
-    --gtf {input[1]} \
-    --pairs {input[2]} \
+    --vcf {input[1]} \
+    --gtf {input[2]} \
+    --pairs {input[3]} \
     --tumor-only \
     --out {output[0]} \
     2> logs/clinical_sv_{pair_id}.log
@@ -245,13 +245,13 @@ shell = """
 mkdir -p report/clinical logs && \
 python {config.venus_tools}/clinical_interpret.py \
     --patient '{pair_id}' \
-    --snv-evidence {input[0]} \
-    --cnv-evidence {input[1]} \
-    --sv-evidence {input[2]} \
-    --tmb {input[3]} \
-    --signatures {input[4]} \
-    --msi {input[5]} \
-    --nmpa {input[6]} \
+    --snv-evidence {input[1]} \
+    --cnv-evidence {input[2]} \
+    --sv-evidence {input[3]} \
+    --tmb {input[4]} \
+    --signatures {input[5]} \
+    --msi {input[6]} \
+    --nmpa {input[7]} \
     --kb-tag '{config.clinical_kb_tag}' \
     --out-biomarkers {output[0]} \
     --out-therapies {output[1]} \
@@ -286,12 +286,12 @@ shell = """
 mkdir -p report/clinical logs && \
 python {config.venus_tools}/clinical_interpret.py \
     --patient '{pair_id}' \
-    --snv-evidence {input[0]} \
-    --cnv-evidence {input[1]} \
-    --sv-evidence {input[2]} \
-    --tmb {input[3]} \
-    --signatures {input[4]} \
-    --nmpa {input[5]} \
+    --snv-evidence {input[1]} \
+    --cnv-evidence {input[2]} \
+    --sv-evidence {input[3]} \
+    --tmb {input[4]} \
+    --signatures {input[5]} \
+    --nmpa {input[6]} \
     --kb-tag '{config.clinical_kb_tag}' \
     --out-biomarkers {output[0]} \
     --out-therapies {output[1]} \
