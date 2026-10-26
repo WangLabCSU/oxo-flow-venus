@@ -250,11 +250,16 @@ pipeline is GRCh38. `clinical_snv_annotate` therefore only joins **ClinVar and
 gnomAD** by GRCh38 coordinates via bcftools; CIViC matching happens in
 `scripts/clinical_tier.py` build-independently — gene + normalized protein
 change (primary), ClinVar VariationID bridge (secondary), GRCh38 coordinates
-(tertiary) — the same strategy as the OncoKB annotator. When CIViC ships real
-GRCh38 coordinates the tertiary path tightens automatically. Matching is
-substitution-centric: in-frame indels/delins/exon skips (EGFR exon-19 del,
-MET exon-14 class) have no portable protein key and match only via the
-ClinVar VariationID bridge — a known recall gap (venus issue #30).
+(tertiary), and — for in-frame indels/delins/dups that have no portable
+protein key — AA-interval overlap (quaternary, venus issue #30): both the
+query HGVSp and CIViC `variant` names / `hgvs_descriptions` /
+`vicc_compliant_name` are parsed into `(op, start, end)` keys (`del` /
+`delins` / `ins`, with `dup` normalized to `ins`) and matched by same-op
+interval overlap, nearest candidate wins. Interval matches are labeled
+`interval:<op>:<start>-<end>` in `tier_basis` so overlap-based recall stays
+auditable; named events without residue coordinates (e.g. MET
+"EX14 skipping") are deliberately not indexed and fall through to
+`no_kb_match` honestly.
 
 Verification is integrated into `scripts/verify_refdata.sh` (column-shape
 checks on the TSVs; WARN-only until first download, like §7).

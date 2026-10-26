@@ -17,10 +17,16 @@ otherwise evidence level A->Tier I-A, B->I-B, C->II-C, D->II-D, E->III;
 benign-only assertion -> Tier IV; unmatched protein-altering -> Tier III.
 
 Output: long TSV, one row per protein-altering or KB-matched PASS variant.
-Matching is substitution-centric: missense/nonsense protein changes get exact
-keys; in-frame indels/delins (e.g. EGFR E746_A750del, MET exon-14 skips) have
-no portable protein key yet and currently match only via ClinVar VariationID —
-a known recall gap, disclosed here and in docs/refdata.md §10.
+Match precedence: (1) exact protein key, (2) ClinVar VariationID bridge,
+(3) GRCh38 coordinate equality, (4) AA-interval overlap for in-frame
+indels/delins/dups (issue #30): query HGVSp and CIViC variant names /
+hgvs_descriptions / vicc_compliant_name are parsed into (op, start, end)
+keys — del / delins / ins with dup normalized to ins (CIViC "H773_V774insH"
+and p.His773dup are the same event) — and matched by same-op interval
+overlap, nearest-interval candidate wins. Interval matches are labeled in
+tier_basis ("interval:del:746-750") so recall-via-overlap stays auditable;
+named events without coordinates (e.g. MET "EX14 skipping") are NOT indexed
+and honestly fall through to no_kb_match.
 Stdlib + pandas + pysam; CSQ subfield order read from the VCF header
 (same contract as scripts/vcf2maf_light.py).
 """
@@ -44,6 +50,7 @@ CODE_KEEP = {"missense_variant", "synonymous_variant", "stop_gained", "stop_lost
              "transcript_ablation"}
 SUB_RE = re.compile(r"^([A-Z*])(\d+)([A-Z*])$")
 P_RE = re.compile(r"p\.([A-Za-z]{3})(\d+)([A-Za-z]{3})")
+PIECE_RE = re.compile(r"(?:[A-Za-z]{3}|[A-Z*])(\d+)")
 CSQ_FORMAT_RE = re.compile(r"Format[:=]\s*([^\">]+)")
 
 
@@ -65,6 +72,64 @@ def norm_hgvsp_core(hgvsp):
     return ""
 
 
+def hgvsp_display(hgvsp):
+    """Cleaned HGVSp for reporting: keeps indel forms readable
+    (p.Glu746_Ala750del -> Glu746_A750del style raw core) when the
+    substitution normalizer has no exact key for them."""
+    if not hgvsp:
+        return ""
+    s = hgvsp.split(":")[-1].strip()
+    if s.startswith("p."):
+        s = s[2:]
+    return s.split("(")[0].strip()
+
+
+def find_p_op(s):
+    """Locate the HGVS protein op in a p.-core string.
+    Returns (match, op) with op in {del, delins, ins}; dup is normalized to
+    ins downstream (CIViC 'H773_V774insH' == p.His773dup). Nucleotide-only
+    strings (c./g. forms) yield no AA pieces and are rejected later."""
+    m = re.search(r"delins(?=[A-Z*])", s)
+    if m:
+        return m, "delins"
+    for pat, op in ((r"del(?![a-z])", "del"),
+                    (r"ins(?=[A-Z*]|$)", "ins"),
+                    (r"dup(?![a-z])", "dup")):
+        m = re.search(pat, s)
+        if m:
+            return m, op
+    return None, None
+
+
+def parse_p_interval(expr):
+    """HGVS protein change -> (op, start, end) for in-frame indel classes.
+    p.Glu746_Ala750del -> ('del',746,750); p.Val600_Lys601delinsGluAla ->
+    ('delins',600,601); p.Met751_Ile752insArg -> ('ins',751,752);
+    p.His773dup -> ('ins',773,773). Substitutions/frameshifts/ter-codes and
+    nucleotide-only expressions -> None."""
+    if not expr:
+        return None
+    s = expr.split(":")[-1].strip()
+    if s.startswith("p."):
+        s = s[2:]
+    s = s.split("(")[0].strip()
+    if "fs" in s or "=" in s or "ext" in s:
+        return None
+    m, op = find_p_op(s)
+    if not op:
+        return None
+    if op == "dup":  # dup == insertion of the duplicated residues
+        op = "ins"
+    pieces = PIECE_RE.findall(s[:m.start()])
+    if not pieces:
+        return None
+    if len(pieces) == 1:
+        a = int(pieces[0])
+        return (op, a, a)
+    a, b = int(pieces[0]), int(pieces[1])
+    return (op, min(a, b), max(a, b))
+
+
 def civic_protein_keys(name, hgvs_field):
     keys = set()
     m = SUB_RE.match(name or "")
@@ -74,6 +139,23 @@ def civic_protein_keys(name, hgvs_field):
         m = P_RE.search(h.strip())
         if m:
             keys.add(f"{_aa1(m.group(1))}{m.group(2)}{_aa1(m.group(3))}")
+    return keys
+
+
+def civic_interval_keys(name, hgvs_field, vicc_field):
+    """(op, start, end) keys from a CIViC variant's name + hgvs_descriptions +
+    vicc_compliant_name, for the interval-overlap index (issue #30). Named
+    events without AA coordinates (e.g. 'EX14 skipping') yield nothing."""
+    keys = set()
+    texts = [name or ""]
+    texts.extend(t.strip() for t in (hgvs_field or "").split(","))
+    texts.extend(t.strip() for t in (vicc_field or "").split(","))
+    for t in texts:
+        if not t:
+            continue
+        iv = parse_p_interval(t)
+        if iv:
+            keys.add(iv)
     return keys
 
 
@@ -100,7 +182,7 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
     ev_by_mp = {str(k): v for k, v in ev.groupby("molecular_profile_id")}
     as_by_mp = {str(k): v for k, v in asex.groupby("molecular_profile_id")}
 
-    variants, by_protein, by_clinvar, by_coord = {}, {}, {}, {}
+    variants, by_protein, by_clinvar, by_coord, by_interval = {}, {}, {}, {}, {}
     for _, r in tv.iterrows():
         vid = r["variant_id"]
         mp = str(r.get("single_variant_molecular_profile_id", ""))
@@ -152,6 +234,9 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
         variants[vid] = {
             "gene": r["feature_name"], "civic_variant": r["variant"],
             "protein_keys": civic_protein_keys(r["variant"], r.get("hgvs_descriptions", "")),
+            "interval_keys": civic_interval_keys(
+                r["variant"], r.get("hgvs_descriptions", ""),
+                r.get("vicc_compliant_name", "")),
             "clinvar_ids": clinv,
             "evidence_levels": ";".join(sorted(ev_levels)),
             "evidence_types": ";".join(sorted(ev_types)),
@@ -163,12 +248,15 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
         }
         for k in variants[vid]["protein_keys"]:
             by_protein.setdefault((r["feature_name"].upper(), k), vid)
+        for k in variants[vid]["interval_keys"]:
+            by_interval.setdefault((r["feature_name"].upper(), k[0]), []).append(
+                (k[1], k[2], vid))
         for cid in clinv:
             by_clinvar.setdefault(cid, vid)
         if build == "GRCh38" and coord[0] and coord[1] and coord[3] and coord[4]:
             # normalize away chr prefixes on both sides (CIViC rows use "1")
             by_coord[(coord[0].removeprefix("chr"), coord[1], coord[3], coord[4])] = vid
-    return variants, by_protein, by_clinvar, by_coord
+    return variants, by_protein, by_clinvar, by_coord, by_interval
 
 
 def csq_field_names(vcf):
@@ -200,9 +288,11 @@ def main():
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
-    variants, by_protein, by_clinvar, by_coord = load_civic(
+    variants, by_protein, by_clinvar, by_coord, by_interval = load_civic(
         args.civic_variant_tsv, args.civic_evidence_tsv, args.civic_assertion_tsv)
-    sys.stderr.write(f"[clinical_tier] CIViC variants indexed: {len(variants)}\n")
+    n_iv = sum(len(v) for v in by_interval.values())
+    sys.stderr.write(f"[clinical_tier] CIViC variants indexed: {len(variants)} "
+                     f"(interval keys: {n_iv})\n")
 
     vcf = pysam.VariantFile(args.vcf)
     fields = csq_field_names(vcf)
@@ -219,7 +309,8 @@ def main():
         if not cons or not CODE_KEEP.intersection(cons.split("&")):
             continue
         gene = c.get("SYMBOL", "")
-        hgvsp = norm_hgvsp_core(c.get("HGVSp", ""))
+        hgvsp_raw = c.get("HGVSp", "")
+        hgvsp = norm_hgvsp_core(hgvsp_raw)
         vaf, dp = "", ""
         smp = rec.samples.get(sample, {}) if sample else {}
         af = smp.get("AF")
@@ -245,14 +336,28 @@ def main():
         elif (rec.chrom.removeprefix("chr"), str(rec.pos), rec.ref, rec.alts[0]) in by_coord:
             vid = by_coord[(rec.chrom.removeprefix("chr"), str(rec.pos), rec.ref, rec.alts[0])]
             basis = "grch38_coord"
+        else:
+            # issue #30: in-frame indel/delins/dup — match by AA-interval
+            # overlap (same op class); nearest-interval candidate wins.
+            qiv = parse_p_interval(hgvsp_raw)
+            if qiv:
+                qop, qs, qe = qiv
+                cands = [iv for iv in by_interval.get((gene.upper(), qop), [])
+                         if iv[0] <= qe and iv[1] >= qs]
+                if cands:
+                    cands.sort(key=lambda t: (abs(t[0] - qs) + abs(t[1] - qe), str(t[2])))
+                    cs, ce, vid = cands[0]
+                    basis = f"interval:{qop}:{cs}-{ce}"
         base = {
             "chrom": rec.chrom, "pos": rec.pos, "ref": rec.ref, "alt": rec.alts[0],
-            "gene": gene, "hgvsp": hgvsp, "consequence": cons, "tumor_vaf": vaf,
+            "gene": gene,
+            "hgvsp": hgvsp or hgvsp_display(hgvsp_raw),
+            "consequence": cons, "tumor_vaf": vaf,
             "tumor_dp": dp, "gnomad_af": gnomad_af, "clinvar_id": clinvar_id,
             "clinvar_sig": clinvar_sig, "kb_tag": args.kb_tag,
         }
         if vid is None:
-            if not hgvsp:
+            if not base["hgvsp"]:
                 if not cons.startswith("splice") and cons != "transcript_ablation":
                     continue  # no protein change, no KB match, no mechanism note
                 rows.append({**base, "civic_variant_id": "", "civic_variant": "",
