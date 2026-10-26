@@ -252,6 +252,7 @@ python {config.venus_tools}/clinical_interpret.py \
     --signatures {input[5]} \
     --msi {input[6]} \
     --nmpa {input[7]} \
+    --cohort-mode paired \
     --kb-tag '{config.clinical_kb_tag}' \
     --out-biomarkers {output[0]} \
     --out-therapies {output[1]} \
@@ -292,6 +293,7 @@ python {config.venus_tools}/clinical_interpret.py \
     --tmb {input[4]} \
     --signatures {input[5]} \
     --nmpa {input[6]} \
+    --cohort-mode tumor_only \
     --kb-tag '{config.clinical_kb_tag}' \
     --out-biomarkers {output[0]} \
     --out-therapies {output[1]} \

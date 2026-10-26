@@ -24,10 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   therapy tables (CIViC evidence + curated NMPA/CSCO context table);
   `clinical_cohort` collects `report/clinical_cohort.tsv`.
   Optional OncoKB enrichment (`clinical_oncokb` rule, REST API) activates via
-  `--arg oncokb_token=<token>` (free academic
+  `--arg oncokb_token_file=<token>` (free academic
   registration); without a token a passthrough companion keeps the downstream
   contract. New `[config]` keys: `clinical_kb_tag`, `civic_*_tsv`,
-  `clinvar_vcf`, `oncokb_token`. `scripts/prepare_clinical_kb.sh` downloads
+  `clinvar_vcf`, `oncokb_token_file`. `scripts/prepare_clinical_kb.sh` downloads
   the KB dumps host-side (GraphQL release discovery; refdata.md §10);
   `verify_refdata.sh` checks them (WARN-only until deployed).
   `clinical_report.py` gains a `--clinical` section (Tier I/II highlights +

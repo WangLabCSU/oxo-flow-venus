@@ -124,14 +124,15 @@ class Integration(unittest.TestCase):
 
         csq_def = "SYMBOL|Consequence|HGVSp"
         recs = [
-            # chrom pos id ref alt -> CSQ ; expected (civic_variant, tier, basis-prefix)
-            ("chr7", 55174721, ".", "A", "T", "EGFR|inframe_deletion|ENSP00000275493.2:p.Glu746_Ala750del", ("E746_A750del", "I", "interval:del:746-750")),
-            ("chr7", 55191822, ".", "C", "T", "EGFR|missense_variant|ENSP00000275493.2:p.Leu858Arg", ("L858R", "I", "protein:EGFR:L858R")),
-            ("chr7", 55174715, ".", "AC", "T", "EGFR|inframe_deletion|ENSP00000275493.2:p.Leu747_Pro753delinsSer", ("L747_P753delinsS", "I", "interval:delins:747-753")),
-            ("chr7", 55181296, ".", "A", "AGGT", "EGFR|inframe_insertion|ENSP00000275493.2:p.Val769_Asp770insAlaSerVal", ("V769_D770insASV", "I", "interval:ins:769-770")),
-            ("chr7", 55181290, ".", "A", "AGGT", "EGFR|inframe_insertion|ENSP00000275493.2:p.His773dup", ("H773_V774insH", "I", "interval:ins:773-774")),
-            ("chr7", 55181378, ".", "A", "ACGG", "MET|inframe_insertion|ENSP00000286626.4:p.Met751_Ile752insArg", ("", "III", "no_kb_match")),
-            ("chr7", 55249071, ".", "G", "A", "EGFR|missense_variant|ENSP00000275493.2:p.Thr790Met", ("", "III", "no_kb_match")),
+            # chrom pos id ref alt -> CSQ, extra INFO ; expected (civic, tier, basis)
+            ("chr7", 55174721, ".", "A", "T", "EGFR|inframe_deletion|ENSP00000275493.2:p.Glu746_Ala750del", "", ("E746_A750del", "I", "interval:del:746-750")),
+            ("chr7", 55191822, ".", "C", "T", "EGFR|missense_variant|ENSP00000275493.2:p.Leu858Arg", ";CLNSIG=Pathogenic", ("L858R", "I", "protein:EGFR:L858R")),
+            ("chr7", 55174715, ".", "AC", "T", "EGFR|inframe_deletion|ENSP00000275493.2:p.Leu747_Pro753delinsSer", "", ("L747_P753delinsS", "I", "interval:delins:747-753")),
+            ("chr7", 55181296, ".", "A", "AGGT", "EGFR|inframe_insertion|ENSP00000275493.2:p.Val769_Asp770insAlaSerVal", "", ("V769_D770insASV", "I", "interval:ins:769-770")),
+            ("chr7", 55181290, ".", "A", "AGGT", "EGFR|inframe_insertion|ENSP00000275493.2:p.His773dup", "", ("H773_V774insH", "I", "interval:ins:773-774")),
+            ("chr7", 55174718, ".", "AGT", "A", "EGFR|inframe_deletion|ENSP00000275493.2:p.Glu749_Ala750del", "", ("", "III", "no_kb_match")),
+            ("chr7", 55181378, ".", "A", "ACGG", "MET|inframe_insertion|ENSP00000286626.4:p.Met751_Ile752insArg", "", ("", "III", "no_kb_match")),
+            ("chr7", 55249071, ".", "G", "A", "EGFR|missense_variant|ENSP00000275493.2:p.Thr790Met", "", ("", "III", "no_kb_match")),
         ]
         vcf = ["##fileformat=VCFv4.2", "##contig=<ID=chr7>",
                "##INFO=<ID=CSQ,Number=.,Type=String,Description=\"Format: " + csq_def + "\">",
@@ -141,8 +142,8 @@ class Integration(unittest.TestCase):
                "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"AD\">",
                "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"DP\">",
                "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tTUMOR"]
-        for c, p, i, r, a, csq, _ in recs:
-            vcf.append(f"{c}\t{p}\t{i}\t{r}\t{a}\t100\tPASS\tCSQ={csq}\tGT:AD:DP\t0/1:30,70:100")
+        for c, p, i, r, a, csq, extra, _ in recs:
+            vcf.append(f"{c}\t{p}\t{i}\t{r}\t{a}\t100\tPASS\tCSQ={csq}{extra}\tGT:AD:DP\t0/1:30,70:100")
         cls.vcf_path = os.path.join(d, "in.vcf")
         with open(cls.vcf_path, "w") as fh:
             fh.write("\n".join(vcf) + "\n")
@@ -197,6 +198,16 @@ class Integration(unittest.TestCase):
 
     def test_no_match_still_tier3(self):
         self._check("55249071", "", "III", "no_kb_match")
+
+    def test_edge_grazing_interval_rejected(self):
+        # audit M6: query del 749-750 overlaps CIViC 746-750 by only 2/5
+        # residues — must NOT inherit the hotspot's tier/therapy mapping
+        self._check("55174718", "", "III", "no_kb_match")
+
+    def test_clnsig_scalar_not_charjoined(self):
+        # audit M1: pysam returns a scalar str for Number=. String INFO;
+        # char-joining it used to corrupt the value and zero the germline screen
+        self.assertEqual(self.by_pos["55191822"]["clinvar_sig"], "Pathogenic")
 
 
 if __name__ == "__main__":

@@ -325,7 +325,12 @@ def main():
         gaf = rec.info.get("AF")
         gnomad_af = round(float(gaf[0]), 6) if gaf not in (None, ()) else ""
         clinvar_id = str(rec.id) if rec.id else ""
-        clinvar_sig = ";".join(rec.info.get("CLNSIG", []) or [])
+        # pysam returns a scalar str for single-value String INFO fields
+        # (ClinVar's CLNSIG has Number=.) — joining that char-by-char corrupts
+        # the value ("Pathogenic" -> "P;a;t;h;o;g;e;n;i;c") and silently breaks
+        # the germline screen downstream (audit M1).
+        _sig = rec.info.get("CLNSIG")
+        clinvar_sig = _sig if isinstance(_sig, str) else (";".join(_sig) if _sig else "")
 
         vid = basis = None
         hit = by_protein.get((gene.upper(), hgvsp)) if hgvsp else None
@@ -339,11 +344,20 @@ def main():
         else:
             # issue #30: in-frame indel/delins/dup — match by AA-interval
             # overlap (same op class); nearest-interval candidate wins.
+            # Audit M6: require the overlap to cover >=50% of the LONGER
+            # interval so edge-grazing candidates cannot inherit a hotspot's
+            # tier/therapy mapping.
             qiv = parse_p_interval(hgvsp_raw)
             if qiv:
                 qop, qs, qe = qiv
-                cands = [iv for iv in by_interval.get((gene.upper(), qop), [])
-                         if iv[0] <= qe and iv[1] >= qs]
+                qlen = qe - qs + 1
+                cands = []
+                for cs_, ce_, vid_ in by_interval.get((gene.upper(), qop), []):
+                    if cs_ > qe or ce_ < qs:
+                        continue
+                    ov = min(qe, ce_) - max(qs, cs_) + 1
+                    if ov * 2 >= max(qlen, ce_ - cs_ + 1):
+                        cands.append((cs_, ce_, vid_))
                 if cands:
                     cands.sort(key=lambda t: (abs(t[0] - qs) + abs(t[1] - qe), str(t[2])))
                     cs, ce, vid = cands[0]
@@ -387,7 +401,13 @@ def main():
                      "evidence_source": "CIViC:" + (v["amp_raw"] or v["evidence_levels"]),
                      "tier_basis": basis})
 
-    out = pd.DataFrame(rows)
+    out = pd.DataFrame(rows, columns=[
+        "chrom", "pos", "ref", "alt", "gene", "hgvsp", "consequence",
+        "tumor_vaf", "tumor_dp", "gnomad_af", "clinvar_id", "clinvar_sig",
+        "kb_tag", "civic_variant_id", "civic_variant", "civic_evidence_levels",
+        "civic_evidence_types", "civic_therapies", "civic_diseases",
+        "amp_tier", "amp_level", "evidence_source", "tier_basis"])
+    out = out.fillna("")
     out.to_csv(args.out, sep="\t", index=False)
     sys.stderr.write(f"[clinical_tier] wrote {len(out)} rows -> {args.out}\n")
 

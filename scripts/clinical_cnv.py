@@ -89,7 +89,8 @@ def main():
             length_mb = (best_amp.end - best_amp.start) / 1e6
             call = "focal_amplification" if length_mb <= args.focal_mb else "amplification"
             log2 = round(float(best_amp.log2), 3)
-            cn = int(pd.to_numeric(best_amp.get("cn"), errors="coerce") or 0)
+            cn_val = pd.to_numeric(best_amp.get("cn"), errors="coerce")
+            cn = int(cn_val) if pd.notna(cn_val) else ""  # audit m11: NaN guard
             segdesc = f"{best_amp.chromosome}:{best_amp.start}-{best_amp.end}({length_mb:.2f}Mb)"
         elif del_ok:
             length_mb = (best_del.end - best_del.start) / 1e6
@@ -105,11 +106,13 @@ def main():
             "segment": segdesc, "ecDNA_evidence": "yes" if gene.upper() in ecgenes else "",
             "disease_context": p["disease_context"], "therapy_context": p["therapy_context"],
             "notes": p.get("notes", ""),
+            "amp_tier": p.get("amp_tier", ""),  # audit M5: per-gene evidence tier
         })
 
     out = pd.DataFrame(rows, columns=[
         "gene", "call", "segment_log2", "segment_cn", "segment",
-        "ecDNA_evidence", "disease_context", "therapy_context", "notes"])
+        "ecDNA_evidence", "disease_context", "therapy_context", "notes",
+        "amp_tier"])
     out.to_csv(args.out, sep="\t", index=False)
     sys.stderr.write(f"[clinical_cnv] wrote {len(out)} calls -> {args.out}\n")
 

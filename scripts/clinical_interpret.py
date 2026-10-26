@@ -64,6 +64,13 @@ def nmpa_match(key, nmpa):
     return nmpa[nmpa["biomarker_key"] == key]
 
 
+def fusion_nmpa_key(gene):
+    """Resolved-partner gene -> NMPA therapy key (audit M3): the curated
+    table folds NTRK1/2/3 under one tissue-agnostic row."""
+    return ("NTRK fusion resolved" if str(gene).upper().startswith("NTRK")
+            else f"{gene} fusion resolved")
+
+
 def emit_therapies(rows_out, biomarker, civic_therapies, nmpa, nmpa_key,
                    kb_tag, klass):
     for t in str(civic_therapies or "").split(";"):
@@ -99,6 +106,8 @@ def main():
     ap.add_argument("--msi", default="")
     ap.add_argument("--signatures", default="")
     ap.add_argument("--nmpa", required=True)
+    ap.add_argument("--cohort-mode", default="tumor_only", choices=["tumor_only", "paired"],
+                    help="affects somatic-quality caveats (audit m1)")
     ap.add_argument("--kb-tag", default="")
     ap.add_argument("--out-biomarkers", required=True)
     ap.add_argument("--out-therapies", required=True)
@@ -129,8 +138,11 @@ def main():
         for _, r in keep.iterrows():
             detail = (f"VAF={r['tumor_vaf']} DP={r['tumor_dp']} "
                       f"gnomAD_AF={r['gnomad_af']} cons={r['consequence']}")
-            caveat = ("putative somatic (tumor-only)" if not r["clinvar_sig"]
-                      else f"germline context: {r['clinvar_sig']}")
+            if r["clinvar_sig"]:
+                caveat = f"germline context: {r['clinvar_sig']}"
+            else:
+                caveat = ("putative somatic (tumor-only)" if args.cohort_mode == "tumor_only"
+                          else "somatic (matched-normal filtered)")
             vaf, dp = _num(r["tumor_vaf"]), _num(r["tumor_dp"])
             if (vaf == vaf and vaf < VAF_REPORT_FLOOR) or (dp == dp and dp < DP_REPORT_FLOOR):
                 caveat += (f" [below common reporting floor VAF>={VAF_REPORT_FLOOR}, "
@@ -171,14 +183,23 @@ def main():
         for _, r in cnv.iterrows():
             ec = f" + ecDNA evidence" if r.get("ecDNA_evidence") == "yes" else ""
             is_amp = "amplification" in r["call"]
+            is_del = "deletion" in r["call"]
             nmpa_key = f"{r['gene']} amp" if is_amp else ""
-            caveat = "putative somatic (tumor-only)"
+            # audit M4: BRCA1/2 biallelic loss surfaces the PARP trial-context
+            # row as context only — never as germline-grade pathogenicity.
+            if is_del and r["gene"] in ("BRCA1", "BRCA2"):
+                nmpa_key = "BRCA1/2 loss (somatic, context)"
+            caveat = ("putative somatic (tumor-only)" if args.cohort_mode == "tumor_only"
+                      else "somatic (matched-normal filtered)")
             if r["gene"] == "ERBB2" and is_amp:
                 caveat += "; HER2 positivity requires IHC3+/ISH+ concordance (DNA amp alone insufficient)"
+            # audit M5: tier is per-gene evidence from the panel table, not a
+            # blanket Tier II.
+            tier = str(r.get("amp_tier", "") or "III")
             biomarkers.append({
                 "class": "CNV",
                 "biomarker": f"{r['gene']} {r['call']}",
-                "amp_tier": "II",
+                "amp_tier": tier,
                 "detail": f"{r['segment']} log2={r['segment_log2']} cn={r['segment_cn']}{ec}",
                 "evidence": "CNVkit+panel",
                 "therapies_civic": "",
@@ -201,21 +222,28 @@ def main():
         for _, r in sv.iterrows():
             resolved = bool(r.get("gene_5_call")) and bool(r.get("gene_3_call"))
             if resolved:
+                # audit M3/M5: fold NTRK1/2/3 onto the curated NTRK row; tier
+                # II only when an approved (non-context) therapy row matched.
+                genes = (r["gene_5_call"], r["gene_3_call"])
+                keys = sorted({fusion_nmpa_key(g) for g in genes})
+                has_approved = any(
+                    str(n.get("context_only", "")).lower() != "true"
+                    for k in keys for _, n in nmpa_match(k, nmpa).iterrows())
+                fmode = ("tumor-only; " if args.cohort_mode == "tumor_only" else "")
                 biomarkers.append({
                     "class": "SV/fusion",
                     "biomarker": f"{r['fusion_candidate']} fusion",
-                    "amp_tier": "II",
+                    "amp_tier": "II" if has_approved else "",
                     "detail": f"{r['breakpoint1']} / {r['breakpoint2']} [{r['scoring']}]",
                     "evidence": "curated fusion panel",
                     "therapies_civic": "", "clinvar_sig": "",
-                    "caveat": "putative somatic (tumor-only); confirm by RNA/FISH",
+                    "caveat": f"{fmode}confirm by RNA/FISH",
                     "civic_diseases": "", "evidence_types": "",
-                    "nmpa_key": "",
+                    "nmpa_key": ";".join(keys),
                 })
-                for gene in (r["gene_5_call"], r["gene_3_call"]):
+                for k in keys:
                     emit_therapies(therapies, biomarkers[-1]["biomarker"], "",
-                                   nmpa, f"{gene} fusion resolved",
-                                   args.kb_tag, "SV/fusion")
+                                   nmpa, k, args.kb_tag, "SV/fusion")
             else:
                 ghit = r.get("gene_5_call") or r.get("gene_3_call")
                 biomarkers.append({
@@ -259,9 +287,11 @@ def main():
         else:
             germline_note = ""
             if germline_flagged != "":
+                gmode = ("tumor-only, no PoN" if args.cohort_mode == "tumor_only"
+                         else "matched-normal cohort")
                 germline_note = (f"; germline screen: {germline_flagged} ClinVar-"
                                  f"flagged + {germline_af} gnomAD_AF>0.001 of "
-                                 f"{n_snv} coding rows (tumor-only, no PoN)")
+                                 f"{n_snv} coding rows ({gmode})")
             if val >= TMB_HIGH_FDA:
                 tier, bio = "I", f"TMB-H (FDA >=13: {val} mut/Mb coding)"
                 nmpa_key = "TMB-H (FDA >=13 mut/Mb)"
@@ -277,7 +307,10 @@ def main():
                            f"mut/Mb (research){germline_note}"),
                 "evidence": f"FDA label >=13 (2026-10-16); legacy >=10 (AMP/ASCO/CAP)",
                 "therapies_civic": "immune checkpoint inhibitor context" if tier else "",
-                "clinvar_sig": "", "caveat": "tumor-only TMB overestimates vs paired",
+                "clinvar_sig": "",
+                "caveat": ("tumor-only TMB overestimates vs paired"
+                           if args.cohort_mode == "tumor_only"
+                           else "matched-normal cohort TMB"),
                 "civic_diseases": "", "evidence_types": "",
             })
             emit_therapies(therapies, bio,

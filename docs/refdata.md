@@ -264,7 +264,7 @@ auditable; named events without residue coordinates (e.g. MET
 Verification is integrated into `scripts/verify_refdata.sh` (column-shape
 checks on the TSVs; WARN-only until first download, like §7).
 
-OncoKB (optional enrichment, `oncokb_token` in config) has **no local dump**:
+OncoKB (optional enrichment, `oncokb_token_file` in config) has **no local dump**:
 the rule queries the REST API at run time with a free academic token from
 <https://www.oncokb.org/api-access> (institutional email; Chakravarty et al.
 2017, JCO PO).

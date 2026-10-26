@@ -1,18 +1,18 @@
-gene	call_type	disease_context	therapy_context	ecdna_relevant
-ERBB2	amp	gastric/GEJ	anti-HER2 (trastuzumab/T-DXd/RC48) if IHC/FISH concordant	yes (ERBB2 ecDNA common in GC, Saito-Adachi 2023)
-MET	amp	gastric	MET inhibitors (trial context; secondary resistance)	yes
-FGFR2	amp	gastric	FGFR inhibitors trial (~5% AGC)	yes (canonical GC ecDNA gene)
-EGFR	amp	gastric/PanCa	no established GC therapy; resistance marker	yes
-CCNE1	amp	gastric/ovarian	CDK2/PKMYT1 trial context	yes (CIN-GC ecDNA gene)
-MDM2	amp	pan-cancer	MDM2 inhibitors trial; ICI hyperprogression warning	yes
-MYC	amp	pan-cancer	MYC-directed trials (BET/PI3K context)	yes (SNU-16 FGFR2-MYC ecDNA)
-KRAS	amp	pan-cancer	no established amp therapy; resistance marker	yes
-PIK3CA	amp	pan-cancer	alpelisib context (breast); GC trial	yes
-PTEN	del	pan-cancer	ICI/PAM pathway context	no
-BRCA1	del	gastric	PARP context (germline-grade evidence preferred)	no
-BRCA2	del	gastric	PARP context	no
-RAD21	del	pan-cancer	trial context	no
-FGFR3	amp	pan-cancer	erdafitinib (urothelial)	yes
-MYCN	amp	pan-cancer	MYC context trials	yes
-KMT2C	del	pan-cancer	trial context	no
-CDKN2A	del	pan-cancer	CDK4/6 trial context	no
+gene	call_type	disease_context	therapy_context	ecdna_relevant	amp_tier
+ERBB2	amp	gastric/GEJ	anti-HER2 (trastuzumab/T-DXd/RC48) if IHC/FISH concordant	yes (ERBB2 ecDNA common in GC, Saito-Adachi 2023)	II
+MET	amp	gastric	MET inhibitors (trial context; secondary resistance)	yes	III
+FGFR2	amp	gastric	FGFR inhibitors trial (~5% AGC)	yes (canonical GC ecDNA gene)	III
+EGFR	amp	gastric/PanCa	no established GC therapy; resistance marker	yes	III
+CCNE1	amp	gastric/ovarian	CDK2/PKMYT1 trial context	yes (CIN-GC ecDNA gene)	III
+MDM2	amp	pan-cancer	MDM2 inhibitors trial; ICI hyperprogression warning	yes	III
+MYC	amp	pan-cancer	MYC-directed trials (BET/PI3K context)	yes (SNU-16 FGFR2-MYC ecDNA)	III
+KRAS	amp	pan-cancer	no established amp therapy; resistance marker	yes	III
+PIK3CA	amp	pan-cancer	alpelisib context (breast); GC trial	yes	III
+PTEN	del	pan-cancer	ICI/PAM pathway context	no	III
+BRCA1	del	gastric	PARP context (germline-grade evidence preferred)	no	III
+BRCA2	del	gastric	PARP context	no	III
+RAD21	del	pan-cancer	trial context	no	III
+FGFR3	amp	pan-cancer	erdafitinib (urothelial)	yes	III
+MYCN	amp	pan-cancer	MYC context trials	yes	III
+KMT2C	del	pan-cancer	trial context	no	III
+CDKN2A	del	pan-cancer	CDK4/6 trial context	no	III

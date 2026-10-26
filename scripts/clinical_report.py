@@ -107,8 +107,10 @@ def interpretation_markdown(path: str | None) -> str:
             flags.append(f"coding TMB {tmb:.3f} mut/Mb = {tmb/med_coding:.0f}× cohort median")
         if med_all > 0 and tmb_all >= 5 * med_all:
             flags.append(f"all-somatic TMB {tmb_all:.3f} mut/Mb = {tmb_all/med_all:.0f}× cohort median")
-        if tmb >= 10:
-            flags.append("exceeds ≥10 mut/Mb high-TMB clinical cutoff (coding convention)")
+        if tmb >= 13:
+            flags.append("TMB-H by FDA label (>=13 mut/Mb coding, 2026-10-16)")
+        elif tmb >= 10:
+            flags.append("TMB 10-<13: legacy high-TMB context only (not FDA label)")
         tot, ind = f(r, c_total), f(r, c_indels)
         if tot > 0 and ind / tot >= 0.30:
             flags.append(f"indel fraction {ind/tot:.0%} — possible MSI/MMR deficiency")
@@ -170,7 +172,9 @@ def md_to_html(md: str) -> str:
     for line in lines:
         esc = html.escape(line)
         if line.startswith("|"):
-            cells = [c.strip() for c in line.strip("|").split("|")]
+            # audit m8: cells reach _inline unescaped otherwise (raw TSV text
+            # with < / & would corrupt the HTML report)
+            cells = [html.escape(c.strip()) for c in line.strip("|").split("|")]
             if all(set(c) <= {"-", ":", " "} for c in cells) and cells:
                 continue  # separator row
             if not in_table:
