@@ -73,6 +73,7 @@ def main():
             filters = set(rec.filter.keys()) if rec.filter else set()
             if filters and not filters <= {"PASS"}:
                 continue  # scored somaticSV: honour the caller's filters
+        mate = rec.info.get("MATEID")
         mate = mate[0] if isinstance(mate, (list, tuple)) else mate
         if mate and mate in seen_ids:
             continue  # mirror of an already-kept record
