@@ -16,4 +16,3 @@ TFG	NTRK1	pan-cancer	FDA/NMPA	*
 CD74	ROS1	pan-cancer	FDA/NMPA	*
 KIF5B	RET	pan-cancer	FDA/NMPA	*
 CCDC6	RET	pan-cancer	FDA/NMPA	*
-NRG1	fusions (ERBB context)	pan-cancer	trial (zenocutuzumab FDA 2024)	handle as 3'-NRG1 or 5'-NRG1 pattern

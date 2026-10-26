@@ -251,7 +251,10 @@ gnomAD** by GRCh38 coordinates via bcftools; CIViC matching happens in
 `scripts/clinical_tier.py` build-independently — gene + normalized protein
 change (primary), ClinVar VariationID bridge (secondary), GRCh38 coordinates
 (tertiary) — the same strategy as the OncoKB annotator. When CIViC ships real
-GRCh38 coordinates the tertiary path tightens automatically.
+GRCh38 coordinates the tertiary path tightens automatically. Matching is
+substitution-centric: in-frame indels/delins/exon skips (EGFR exon-19 del,
+MET exon-14 class) have no portable protein key and match only via the
+ClinVar VariationID bridge — a known recall gap (venus issue #30).
 
 Verification is integrated into `scripts/verify_refdata.sh` (column-shape
 checks on the TSVs; WARN-only until first download, like §7).

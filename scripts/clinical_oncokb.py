@@ -27,9 +27,13 @@ API = "https://api.oncokb.org/api/v1/variants/annotate"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--snv-evidence", required=True)
-    ap.add_argument("--token", required=True)
+    ap.add_argument("--token-file", required=True,
+                    help="file containing the OncoKB API token (keeps the "
+                         "token out of engine command logs)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
+    with open(args.token_file) as fh:
+        token = fh.read().strip()
 
     df = pd.read_csv(args.snv_evidence, sep="\t", dtype=str).fillna("")
     for col in ("oncokb_level", "oncokb_treatment", "oncokb_mutation_effect"):
@@ -48,7 +52,7 @@ def main():
                         "type": "variant", "sampleId": "query"})
     body = json.dumps(queries).encode()
     req = urllib.request.Request(API, data=body, headers={
-        "Content-Type": "application/json", "Authorization": f"Bearer {args.token}"})
+        "Content-Type": "application/json", "Authorization": f"Bearer {token}"})
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             results = json.load(resp)

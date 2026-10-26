@@ -48,7 +48,7 @@ if [ -s "$CIVIC_TAG_FILE" ] && grep -q . "$CIVIC_TAG_FILE"; then
 fi
 
 echo "[prepare_clinical_kb] discovering latest CIViC monthly release..."
-CIVIC_JSON=$(curl -sSL --retry 3 "$API" -H 'Content-Type: application/json' \
+CIVIC_JSON=$(curl -fsSL --retry 3 "$API" -H 'Content-Type: application/json' \
   -d '{"query":"{ dataReleases { name variantTsv { path } acceptedEvidenceTsv { path } acceptedAssertionTsv { path } } }"}')
 # dataReleases[0] is nightly; pick the first non-nightly (most recent monthly).
 RELEASE=$(python3 - "$CIVIC_JSON" <<'PY'
@@ -70,7 +70,7 @@ for kind in variant evidence assertion; do
   fname="$(basename "$url")"
   if [ ! -s "$fname" ]; then
     echo "  downloading $fname"
-    curl -sSL --retry 3 -o "$fname" "$url"
+    curl -fsSL --retry 3 -o "$fname" "$url"
   else
     echo "  present: $fname"
   fi
@@ -79,7 +79,7 @@ done
 for f in clinvar.vcf.gz clinvar.vcf.gz.tbi; do
   if [ ! -s "$f" ]; then
     echo "[prepare_clinical_kb] downloading $f"
-    curl -sSL --retry 3 -o "$f" "$CLINVAR_BASE/$f"
+    curl -fsSL --retry 3 -o "$f" "$CLINVAR_BASE/$f"
   else
     echo "[prepare_clinical_kb] present: $f"
   fi

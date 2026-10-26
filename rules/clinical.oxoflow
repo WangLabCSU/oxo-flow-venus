@@ -43,6 +43,7 @@ echo "[clinical_kb_prep] KB tag {config.clinical_kb_tag} verified"
 name = "clinical_snv_annotate"
 description = "Annotate PASS+VEP VCF with gnomAD/ClinVar and tier vs CIViC"
 input = [
+    "scripts/clinical_tier.py",
     "deliver/{pair_id}.somatic.pass.vep.vcf.gz",
     "{config.clinvar_vcf}",
     "{config.civic_variant_tsv}",
@@ -92,18 +93,18 @@ python {config.venus_tools}/clinical_tier.py \
 [[rules]]
 name = "clinical_oncokb"
 description = "OncoKB level/R1R2 enrichment of the SNV evidence table"
-input = ["report/clinical/{pair_id}.snv_evidence.tsv"]
+input = ["scripts/clinical_oncokb.py", "report/clinical/{pair_id}.snv_evidence.tsv"]
 output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
 protected_output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
 threads = 1
 memory = "4G"
 environment = { pixi = "envs/clinical/pixi.toml" }
-when = "config.oncokb_token != ''"
+when = "config.oncokb_token_file != ''"
 shell = """
 mkdir -p logs && \
 python {config.venus_tools}/clinical_oncokb.py \
-    --snv-evidence {input[0]} \
-    --token '{config.oncokb_token}' \
+    --snv-evidence {input[1]} \
+    --token-file '{config.oncokb_token_file}' \
     --out {output[0]} \
     2> logs/clinical_oncokb_{pair_id}.log
 """
@@ -117,7 +118,7 @@ protected_output = ["report/clinical/{pair_id}.snv_evidence.onco.tsv"]
 threads = 1
 memory = "1G"
 environment = { pixi = "envs/clinical/pixi.toml" }
-when = "config.oncokb_token == ''"
+when = "config.oncokb_token_file == ''"
 shell = """
 mkdir -p logs && \
 cp {input[0]} {output[0]} && \
@@ -133,6 +134,7 @@ echo "[clinical_oncokb_skip] no oncokb_token configured; CIViC-only evidence" \
 name = "clinical_cnv_genes"
 description = "Actionable CNV gene calls from CNVkit segments + ecDNA cross-flag"
 input = [
+    "scripts/clinical_cnv.py",
     "cnv/{pair_id}/{pair_id}.call.cns",
     "{config.gencode_gtf}",
     "resources/clinical/actionable_cnv_genes.tsv",
@@ -163,6 +165,7 @@ python {config.venus_tools}/clinical_cnv.py \
 name = "clinical_sv_fusions_paired"
 description = "Fusion candidates from scored somaticSV (paired cohorts)"
 input = [
+    "scripts/clinical_sv.py",
     "deliver/{pair_id}.sv.vcf.gz",
     "{config.gencode_gtf}",
     "resources/clinical/actionable_fusion_pairs.tsv",
@@ -187,6 +190,7 @@ python {config.venus_tools}/clinical_sv.py \
 name = "clinical_sv_fusions_tumoronly"
 description = "Fusion candidates from candidateSV (tumor-only cohorts; unscored)"
 input = [
+    "scripts/clinical_sv.py",
     "deliver/{pair_id}.sv.candidate.vcf.gz",
     "{config.gencode_gtf}",
     "resources/clinical/actionable_fusion_pairs.tsv",
@@ -216,6 +220,7 @@ python {config.venus_tools}/clinical_sv.py \
 name = "clinical_biomarkers_paired"
 description = "Merge SNV/CNV/SV/TMB/MSI/signatures into biomarker + therapy tables"
 input = [
+    "scripts/clinical_interpret.py",
     "report/clinical/{pair_id}.snv_evidence.onco.tsv",
     "report/clinical/{pair_id}.cnv_evidence.tsv",
     "report/clinical/{pair_id}.sv_evidence.tsv",
@@ -257,6 +262,7 @@ python {config.venus_tools}/clinical_interpret.py \
 name = "clinical_biomarkers_tumoronly"
 description = "Merge SNV/CNV/SV/TMB/signatures into biomarker + therapy tables (no MSI)"
 input = [
+    "scripts/clinical_interpret.py",
     "report/clinical/{pair_id}.snv_evidence.onco.tsv",
     "report/clinical/{pair_id}.cnv_evidence.tsv",
     "report/clinical/{pair_id}.sv_evidence.tsv",
@@ -299,12 +305,18 @@ python {config.venus_tools}/clinical_interpret.py \
 [[rules]]
 name = "clinical_cohort"
 description = "Collect per-pair biomarker tables into the cohort clinical table"
-input = ["config/pairs.tsv"]
+input = ["scripts/clinical_cohort.py", "config/pairs.tsv"]
 expand_inputs = [
     { pattern = "report/clinical/{pair_id}.biomarkers.tsv", variables = { pair_id = "config.pairs_list" } },
 ]
-output = ["report/clinical_cohort.tsv"]
-protected_output = ["report/clinical_cohort.tsv"]
+output = [
+    "report/clinical_cohort.tsv",
+    "report/clinical_therapies_cohort.tsv",
+]
+protected_output = [
+    "report/clinical_cohort.tsv",
+    "report/clinical_therapies_cohort.tsv",
+]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/clinical/pixi.toml" }
@@ -314,5 +326,6 @@ python {config.venus_tools}/clinical_cohort.py \
     --pairs config/pairs.tsv \
     --dir report/clinical \
     --out {output[0]} \
+    --therapies-out {output[1]} \
     2> logs/clinical_cohort.log
 """

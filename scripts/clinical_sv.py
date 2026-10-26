@@ -69,7 +69,10 @@ def main():
     for rec in vcf.fetch():
         if (rec.info.get("SVTYPE") or "") != "BND":
             continue
-        mate = rec.info.get("MATEID")
+        if not args.tumor_only:
+            filters = set(rec.filter.keys()) if rec.filter else set()
+            if filters and not filters <= {"PASS"}:
+                continue  # scored somaticSV: honour the caller's filters
         mate = mate[0] if isinstance(mate, (list, tuple)) else mate
         if mate and mate in seen_ids:
             continue  # mirror of an already-kept record

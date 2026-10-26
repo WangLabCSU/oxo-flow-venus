@@ -328,14 +328,32 @@ CLINICAL_NOT_RUN = (
 )
 
 
-def clinical_markdown(path: str, title: str = "Clinical interpretation") -> str:
-    """Render the cohort clinical table grouped by patient, Tier I first."""
+def clinical_markdown(path: str, therapies_path: str = "",
+                      title: str = "Clinical interpretation") -> str:
+    """Render the cohort clinical table grouped by patient, Tier I first,
+    plus the therapy-matching table and a tier legend."""
     rows = read_tsv(path)
     parts = [f"## {title}\n"]
     if not rows:
         parts.append(CLINICAL_NOT_RUN)
         return "\n".join(parts)
     parts.append(CLINICAL_METHODS)
+    kb_tags = sorted({r.get("kb_tag", "") for r in read_tsv(therapies_path)
+                      if r.get("kb_tag")}) or \
+        sorted({r.get("kb_tag", "") for r in rows if r.get("kb_tag")})
+    if kb_tags:
+        parts.append(f"_Knowledgebase: {', '.join(kb_tags)} (CIViC monthly "
+                     f"dump + ClinVar weekly; see report/clinical/"
+                     f"kb_versions.tsv)._")
+    parts.append(
+        "\n**Tier legend** — Tier I: strong clinical significance "
+        "(FDA/NMPA-approved or guideline-embedded therapy/diagnosis); "
+        "Tier II: potential clinical significance (small-series or "
+        "preclinical); Tier III: variant of unknown significance or "
+        "non-therapeutic evidence only; Tier IV: benign/likely benign. "
+        "Tiers derived per the VICC meta-knowledgebase mapping from "
+        "**therapeutic (Predictive)** CIViC evidence/assertions; "
+        "diagnostic/prognostic evidence is capped at Tier III.\n")
     cols = [c for c in ["pair_id", "class", "biomarker", "amp_tier", "detail",
                         "evidence", "caveat"] if c in rows[0]]
     parts.append(tsv_markdown(path, title="Actionable biomarkers (all tiers)",
@@ -352,6 +370,15 @@ def clinical_markdown(path: str, title: str = "Clinical interpretation") -> str:
         parts.append("")
     else:
         parts.append("_No Tier I/II actionable calls in this cohort._\n")
+    therapies = read_tsv(therapies_path)
+    if therapies:
+        parts.append(tsv_markdown(
+            therapies_path, title="Therapy options (CIViC evidence + curated "
+                                  "NMPA/CSCO context; `requires` states the "
+                                  "confirmation modality each option demands)",
+            only=[c for c in ["pair_id", "biomarker", "therapy",
+                              "region_or_approval", "line_or_level",
+                              "requires", "source"] if c in therapies[0]]))
     return "\n".join(parts)
 
 
@@ -364,6 +391,8 @@ def main() -> int:
     ap.add_argument("--ecdna", help="ecDNA cohort counts table (AmpliconClassifier)")
     ap.add_argument("--msi", help="MSI cohort table (BH-corrected)")
     ap.add_argument("--clinical", help="cohort clinical interpretation table")
+    ap.add_argument("--clinical-therapies",
+                    help="cohort therapy options table")
     ap.add_argument("--rna-qc")
     ap.add_argument("--scrna-metrics")
     ap.add_argument("--methods", help="methods Markdown fragment")
@@ -427,7 +456,7 @@ def main() -> int:
             parts.append(msi_notes(rows))
 
     if args.clinical:
-        parts.append(clinical_markdown(args.clinical,
+        parts.append(clinical_markdown(args.clinical, args.clinical_therapies,
                                        title="Clinical interpretation "
                                              "(actionable biomarkers & therapy context)"))
 

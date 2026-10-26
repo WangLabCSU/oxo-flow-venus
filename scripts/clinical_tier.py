@@ -106,6 +106,9 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
         mp = str(r.get("single_variant_molecular_profile_id", ""))
         ev_levels, ev_types, therapies, diseases = set(), set(), set(), set()
         amp_tier, amp_level, amp_raw, reg_approval, nccn, benign = "", "", "", "", "", False
+        ev_pairs = []
+        assert_predictive_seen = False
+        assert_any_tiered = False
         for sub in (ev_by_mp.get(mp), as_by_mp.get(mp)):
             if sub is None:
                 continue
@@ -114,17 +117,34 @@ def load_civic(variant_tsv, evidence_tsv, assertion_tsv):
             if "evidence_level" in sub.columns:
                 ev_levels |= set(sub["evidence_level"])
                 ev_types |= set(sub["evidence_type"])
+                ev_pairs.extend(zip(sub["evidence_level"], sub["evidence_type"]))
             if "amp_category" in sub.columns:
                 for _, a in sub.iterrows():
                     t, l = parse_amp_category(a.get("amp_category", ""))
-                    if t and (not amp_tier or (t, l) < (amp_tier, amp_level)):
-                        amp_tier, amp_level, amp_raw = t, l, a.get("amp_category", "")
-                        reg_approval = a.get("regulatory_approval", "")
-                        nccn = a.get("nccn_guideline", "")
+                    a_type = str(a.get("assertion_type", ""))
+                    # AMP tier I/II come from THERAPEUTIC assertions only;
+                    # diagnostic/prognostic/predisposing assertions describe
+                    # the variant but do not make it drug-actionable.
+                    if a_type == "Predictive":
+                        assert_predictive_seen = True
+                    if t:
+                        assert_any_tiered = True
+                        if a_type == "Predictive" and (not amp_tier or (t, l) < (amp_tier, amp_level)):
+                            amp_tier, amp_level, amp_raw = t, l, a.get("amp_category", "")
+                            reg_approval = a.get("regulatory_approval", "")
+                            nccn = a.get("nccn_guideline", "")
                     if "benign" in str(a.get("significance", "")).lower():
                         benign = True
-        if not amp_tier and ev_levels:
-            amp_tier, amp_level = tier_from_evidence_level(sorted(ev_levels)[0])
+        # evidence-level fallback: THERAPEUTIC (Predictive) items only — a
+        # Level-A prognostic item must not masquerade as an actionable Tier I.
+        if not amp_tier:
+            pred_levels = sorted(l for l, t in ev_pairs if t == "Predictive")
+            if pred_levels:
+                amp_tier, amp_level = tier_from_evidence_level(pred_levels[0])
+            elif assert_any_tiered and not assert_predictive_seen:
+                amp_tier = "III"  # tiered assertions exist, none therapeutic
+            elif ev_levels:
+                amp_tier = "III"  # evidence exists, none therapeutic-tiered
         clinv = {x.strip() for x in re.split(r"[,;]", r.get("clinvar_ids", "")) if x.strip()}
         build = r.get("reference_build", "")
         coord = (r.get("chromosome", ""), r.get("start", ""), r.get("stop", ""),
