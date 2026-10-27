@@ -155,16 +155,20 @@ clinvar_vcf = "/home/data/reference/clinical_kb/clinvar.chr.vcf.gz"
 oncokb_token_file = ""
 
 # Neoantigen module (venus#31): SpecHLA typing + pVACtools prediction.
-# P0 predictor = MHCflurry (open license, models pre-fetched by
-# scripts/prepare_neoantigen_ref.sh); DTU NetMHCpan/NetMHCIIpan are excluded
-# until an operator manually installs them (academic license forbids
-# redistribution). Tumor purity/ploidy stay unset in the tumor-only organoid
-# cohort (near-clonal tumor; ASCAT purity needs matched normal) — pvacseq
-# then skips CCF estimation.
+# P0 predictor = MHCflurry (Apache-2.0, models pre-fetched by
+# scripts/prepare_neoantigen_ref.sh into mhcflurry_data_dir); DTU
+# NetMHCpan/NetMHCIIpan are excluded until an operator manually installs
+# them (academic license forbids redistribution; see vep_plugins_dir for the
+# Ensembl VEP plugin dir used by the re-annotation rule).
+# Tumor purity stays unset in the tumor-only organoid cohort: pvactools then
+# estimates purity directly from the variant VAFs (no ASCAT matched-normal
+# estimate available). --tumor-ploidy does not exist in pvactools 7.x.
 neo_predictors = "MHCflurry"
 neo_binding_nm = 500
+neo_min_alleles = 2
 neo_tumor_purity = ""
-neo_tumor_ploidy = ""
+mhcflurry_data_dir = "/home/data/reference/mhcflurry_data"
+vep_plugins_dir = "/home/data/reference/vep_plugins"
 
 # Pipeline helpers
 venus_tools = "scripts"

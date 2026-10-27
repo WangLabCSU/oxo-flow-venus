@@ -5,6 +5,25 @@ All notable changes to Venus will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- neoantigen module P0 (venus#31): SpecHLA typing, VEP plugin re-annotation
+  (Wildtype/Frameshift), pVACseq MHCflurry prediction, burden report with
+  expression filter and honest tumor-only/class-II disclosures
+
+### Fixed
+- neoantigen post-audit (independent review): pvacseq input must be the
+  plugin-annotated VCF (pvactools hard-requires FrameshiftSequence/
+  WildtypeProtein/TSL CSQ fields); sample_name must match the VCF sample
+  column; SpecHLA extract output names and typing outdir nesting;
+  mhcflurry-predict --list-supported-alleles; report aliases aligned to
+  pVACtools 7.x real column names (Gene Name / Best MT IC50 Score / ...);
+  explicit pvacseq filter knobs (exploratory percentile strategy, VAF/depth
+  filters off); --tumor-ploidy removed (does not exist in pvactools 7.x);
+  MHCFLURRY_DATA_DIR wired into the rule; G-group wide-table parsing;
+  unsourced numbers dropped (5-14%, TESLA 100nM attribution)
+
 ## [Unreleased]
 
 ### Added

@@ -1,0 +1,9 @@
+[project]
+name = "vep_perl"
+description = "Standard offline VEP (Perl) + plugins for pVACseq input re-annotation (venus#31)"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+ensembl-vep = "113"
+htslib = ">=1.15"

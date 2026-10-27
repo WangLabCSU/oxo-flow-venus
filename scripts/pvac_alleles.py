@@ -19,7 +19,7 @@ import sys
 def mhcflurry_supported():
     try:
         out = subprocess.run(
-            ["mhcflurry-predict", "--supported-alleles"],
+            ["mhcflurry-predict", "--list-supported-alleles"],
             capture_output=True, text=True, check=True, timeout=300)
         return {ln.strip() for ln in out.stdout.splitlines() if ln.strip()}
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) \
@@ -49,9 +49,13 @@ def main():
                          f"MHCflurry ({len(unsupported)}): "
                          f"{', '.join(unsupported)}\n")
     if len(usable) < args.min_alleles:
+        # Escape hatch for genuine single-allele expression (e.g. HLA-LOH):
+        # pass --min-alleles 1 explicitly after reviewing the typing evidence;
+        # default stays strict so a collapsed typing is a loud QC failure.
         sys.exit(f"[pvac_alleles] only {len(usable)} typed allele(s) usable "
                  f"(< --min-alleles {args.min_alleles}) — treat as HLA-typing "
-                 f"QC failure, not an empty result")
+                 f"QC failure, not an empty result (override with "
+                 f"--min-alleles 1 only after reviewing LOH evidence)")
     with open(args.out, "w") as fh:
         fh.write(",".join(usable) + "\n")
     sys.stderr.write(f"[pvac_alleles] {len(usable)} usable alleles "

@@ -48,7 +48,9 @@ def parse_result_txt(path):
 
 
 def parse_g_group(path):
-    """hla.result.g.group.txt -> {gene: (g1, g2)}; tolerant to absence."""
+    """hla.result.g.group.txt -> {gene: (g1, g2)}; tolerant to absence.
+    The file is a wide table with the same HLA_<gene>_1/2 columns as
+    hla.result.txt (audit M4)."""
     if not path:
         return {}
     try:
@@ -56,12 +58,21 @@ def parse_g_group(path):
             lines = [ln.rstrip("\n") for ln in fh if ln.strip()]
     except OSError:
         return {}
-    out = {}
-    for ln in lines[1:]:
-        parts = ln.split("\t")
-        if len(parts) >= 3:
-            out[parts[0].strip()] = (parts[1].strip(), parts[2].strip())
-    return out
+    if len(lines) < 2:
+        return {}
+    header = lines[0].split("\t")
+    # skip a version/banner row if the first line is not the header
+    if "HLA_A_1" not in header:
+        if len(lines) < 3:
+            return {}
+        header = lines[1].split("\t")
+        lines = lines[1:]
+    data = lines[1].split("\t") if len(lines) > 1 else [""] * len(header)
+    if len(data) < len(header):
+        data += [""] * (len(header) - len(data))
+    row = dict(zip(header, data))
+    return {g: (row.get(f"HLA_{g}_1", "").strip(),
+                row.get(f"HLA_{g}_2", "").strip()) for g in GENES}
 
 
 def main():
