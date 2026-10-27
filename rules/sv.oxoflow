@@ -85,6 +85,7 @@ environment = { pixi = "envs/sv/pixi.toml" }
 when = "wildcard.control == ''"
 shell = """
 mkdir -p manta logs && \
+rm -rf manta/{pair_id} && \
 configManta.py \
     --bam {input[0]} \
     --referenceFasta {input[1]} \

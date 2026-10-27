@@ -1,0 +1,10 @@
+[project]
+name = "hla"
+description = "HLA typing for venus neoantigen module (SpecHLA, venus#31)"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+spechla = "1.0.12"
+samtools = ">=1.15"
+bcftools = ">=1.15"

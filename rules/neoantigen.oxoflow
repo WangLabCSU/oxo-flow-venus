@@ -1,0 +1,133 @@
+[workflow]
+name = "venus-neoantigen"
+description = "Neoantigen module: SpecHLA typing -> pVACseq (MHCflurry P0) -> burden report (venus#31)"
+
+# SpecHLA HLA typing from the BQSR WGS BAM. Organoid/tumor-only caveat is
+# carried in the parsed allele table (no matched germline in this cohort).
+[[rules]]
+name = "hla_type_dna"
+description = "SpecHLA HLA typing (8 classical loci) from WGS BAM"
+when = "wildcard.assay == 'wgs'"
+input = [
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+output = [
+    "hla/{sample}/hla.result.txt",
+    "hla/{sample}.alleles.tsv",
+]
+log = "logs/hla_type_dna/{sample}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/hla/pixi.toml" }
+shell = """
+mkdir -p hla/{sample} logs/hla_type_dna && \
+spechla-extract-hla-reads -s {sample} -b {input[0]} -r hg38 -o hla/{sample} \
+    > {log} 2>&1 && \
+spechla -n {sample} \
+    -1 hla/{sample}/{sample}.final_extract_1.fq.gz \
+    -2 hla/{sample}/{sample}.final_extract_2.fq.gz \
+    -o hla/{sample}/ >> {log} 2>&1 && \
+python {config.venus_tools}/hla_parse.py --sample {sample} \
+    --result hla/{sample}/hla.result.txt \
+    --g-group hla/{sample}/hla.result.g.group.txt \
+    --mode tumor_only \
+    --out {output[1]}
+"""
+
+# Ensembl gene_id -> HGNC symbol map, cached from the GTF (tiny; shared by
+# every neoantigen report).
+[[rules]]
+name = "gene_symbol_map"
+description = "Cache gene_id->symbol pairs from the GENCODE GTF"
+input = ["{config.gencode_gtf}"]
+output = ["ref/gene_symbols.tsv"]
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+mkdir -p ref && \
+awk -F'\\t' '$0 !~ /^#/ && $3 == "gene" { \
+    match($9, /gene_id "[^"]+"/); gid = substr($9, RSTART+9, RLENGTH-10); \
+    match($9, /gene_name "[^"]+"/); gname = substr($9, RSTART+11, RLENGTH-12); \
+    print gid "\\t" gname }' {input[0]} > {output}
+"""
+
+# pVACseq on the PASS somatic VCF (VEP-annotated deliverable). P0 predictor =
+# MHCflurry (open license); DTU tools (NetMHCpan/NetMHCIIpan) are absent on
+# this deployment — see scripts/prepare_neoantigen_ref.sh for the audit step.
+# Tumor purity/ploidy are NOT estimated in the tumor-only organoid cohort
+# (organoids are near-clonal tumor; ASCAT purity needs matched normal), so
+# pvacseq runs without CCF unless config injects the values explicitly.
+[[rules]]
+name = "pvacseq_run"
+description = "pVACseq MHC-I neoantigen prediction (MHCflurry)"
+when = "config.tumor_only == 'true'"
+input = [
+    "deliver/{pair_id}.somatic.pass.vep.vcf",
+    "hla/{experiment}.alleles.tsv",
+]
+output = [
+    "neoantigen/{pair_id}/filtered.tsv",
+    "neoantigen/{pair_id}/alleles.txt",
+]
+log = "logs/pvacseq_{pair_id}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/pvac/pixi.toml" }
+shell = """
+mkdir -p neoantigen/{pair_id} logs && \
+python {config.venus_tools}/pvac_alleles.py \
+    --alleles-tsv {input[1]} --min-alleles 2 \
+    --out {output[1]} && \
+ALLELES=$(cat {output[1]}) && \
+PURITY_ARG=""; \
+[ -n "{config.neo_tumor_purity}" ] && PURITY_ARG="--tumor-purity {config.neo_tumor_purity}"; \
+PLOIDY_ARG=""; \
+[ -n "{config.neo_tumor_ploidy}" ] && PLOIDY_ARG="--tumor-ploidy {config.neo_tumor_ploidy}"; \
+pvacseq run {input[0]} {pair_id} "$ALLELES" neoantigen/{pair_id}/run \
+    --prediction-algorithms {config.neo_predictors} \
+    --binding-threshold {config.neo_binding_nm} \
+    --top-score-metric lowest \
+    $PURITY_ARG $PLOIDY_ARG \
+    > {log} 2>&1 && \
+cp neoantigen/{pair_id}/run/MHC_Class_I/*.filtered.tsv {output[0]}
+"""
+
+# Per-patient burden report: candidates TSV + long summary + markdown, with
+# TESLA expression filter from the pair's RNA featureCounts. The RNA sample
+# name follows the venus cohort convention "{pair_id}-TR" (same key convention
+# as groups.tsv bulkRNA); cohorts deviating from it should extend this rule.
+[[rules]]
+name = "neoantigen_report"
+description = "Neoantigen burden + QC report (TESLA TPM filter)"
+input = [
+    "neoantigen/{pair_id}/filtered.tsv",
+    "hla/{experiment}.alleles.tsv",
+    "rna/counts/{pair_id}-TR.featurecounts.txt",
+    "ref/gene_symbols.tsv",
+]
+output = [
+    "neoantigen/{pair_id}.candidates.tsv",
+    "neoantigen/{pair_id}.summary.tsv",
+    "neoantigen/{pair_id}.report.md",
+]
+log = "logs/neoantigen_report_{pair_id}.log"
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+python {config.venus_tools}/neoantigen_report.py \
+    --pvac-tsv {input[0]} \
+    --hla-tsv {input[1]} \
+    --counts {input[2]} \
+    --gene-map {input[3]} \
+    --patient {pair_id} \
+    --mode tumor_only \
+    --predictors '{config.neo_predictors}' \
+    --strong-nm {config.neo_binding_nm} \
+    --out-candidates {output[0]} \
+    --out-summary {output[1]} \
+    --out-md {output[2]} \
+    2> {log}
+"""

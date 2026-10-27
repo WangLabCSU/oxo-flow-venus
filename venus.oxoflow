@@ -154,6 +154,18 @@ civic_assertion_tsv = "/home/data/reference/clinical_kb/01-Oct-2026-AcceptedAsse
 clinvar_vcf = "/home/data/reference/clinical_kb/clinvar.chr.vcf.gz"
 oncokb_token_file = ""
 
+# Neoantigen module (venus#31): SpecHLA typing + pVACtools prediction.
+# P0 predictor = MHCflurry (open license, models pre-fetched by
+# scripts/prepare_neoantigen_ref.sh); DTU NetMHCpan/NetMHCIIpan are excluded
+# until an operator manually installs them (academic license forbids
+# redistribution). Tumor purity/ploidy stay unset in the tumor-only organoid
+# cohort (near-clonal tumor; ASCAT purity needs matched normal) — pvacseq
+# then skips CCF estimation.
+neo_predictors = "MHCflurry"
+neo_binding_nm = 500
+neo_tumor_purity = ""
+neo_tumor_ploidy = ""
+
 # Pipeline helpers
 venus_tools = "scripts"
 workflow_file = "venus.oxoflow"
@@ -239,6 +251,9 @@ path = "rules/ecdna.oxoflow"
 
 [[include]]
 path = "rules/clinical.oxoflow"
+
+[[include]]
+path = "rules/neoantigen.oxoflow"
 
 [[include]]
 path = "rules/report.oxoflow"

@@ -271,6 +271,25 @@ the rule queries the REST API at run time with a free academic token from
 
 ---
 
+## 11. Neoantigen module references — SpecHLA + pVACtools (venus#31)
+
+| Component | Source | License / redistribution | Deploy |
+|---|---|---|---|
+| SpecHLA 1.0.12 | bioconda (`spechla`), IMGT HLA db bundled (repo `db/`, MIT) | MIT — redistributable | `envs/hla` (pixi) |
+| pVACtools 7.1.5 | bioconda (`pvactools`) | BSD-3-Clause-Clear | `envs/pvac` (pixi) |
+| MHCflurry 2.x | bioconda (`mhcflurry`) | Open (BSD-lineage) — models pre-fetched by `scripts/prepare_neoantigen_ref.sh` into `/home/data/reference/mhcflurry_data` | via `envs/pvac` |
+| NetMHCpan 4.1b / NetMHCIIpan | `services.healthtech.dtu.dk` | **DTU academic license — no redistribution, commercial use paid** | **excluded from P0**; operator may install manually into `/home/data/reference/dtu_mhc` (prepare script audits presence) |
+
+Data flow: `bqsr/{sample}.bqsr.bam` → SpecHLA (`hla/{sample}/`) → `hla_parse.py` →
+alleles TSV → `pvac_alleles.py` (∩ MHCflurry-supported) → `pvacseq run` on
+`deliver/{pair_id}.somatic.pass.vep.vcf` → `neoantigen_report.py` (TESLA TPM filter
+from `rna/counts/{pair_id}-TR.featurecounts.txt`). Tumor purity/ploidy are not
+estimated in the tumor-only organoid cohort (near-clonal tumor; ASCAT needs matched
+normal) — pvacseq CCF stays off unless config injects values. Class-II predictions
+report as not_run until DTU tools are installed.
+
+---
+
 ## Adding a new host reference — checklist
 
 1. Find the canonical source (vendor bundle, consortium FTP, Zenodo DOI);

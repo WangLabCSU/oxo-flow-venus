@@ -1,0 +1,10 @@
+[project]
+name = "pvac"
+description = "Neoantigen prediction for venus (pVACtools + MHCflurry, venus#31)"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.11"
+pvactools = "7.1.5"
+mhcflurry = ">=2.1"
