@@ -169,6 +169,10 @@ neo_min_alleles = 2
 neo_tumor_purity = ""
 mhcflurry_data_dir = "/home/data/reference/mhcflurry_data"
 vep_plugins_dir = "/home/data/reference/vep_plugins"
+# Standard (Perl) VEP cache for the neoantigen re-annotation rule. The
+# pipeline's primary cache (vep_cache_dir) is a vep-rs JSON cache that Perl
+# VEP cannot read — the two are separate deployments of the same release.
+vep_perl_cache = "/home/data/reference/vep_cache_perl"
 
 # Pipeline helpers
 venus_tools = "scripts"
