@@ -154,8 +154,10 @@ def run_report(tmp, pvac_rows, hla_rows, counts_lines=None, extra=None,
         args += ["--usable-alleles", ua]
     if counts_lines is not None:
         counts = os.path.join(tmp, "counts.txt")
+        # real featureCounts layout: '# Program:...' line THEN the Geneid header
         write_tsv(counts,
-                  "# Geneid\tChr\tStart\tEnd\tStrand\tLength\tT1-TR\n"
+                  "# Program:featureCounts v2.1.1; Command:\"featureCounts\"\n"
+                  "Geneid\tChr\tStart\tEnd\tStrand\tLength\tT1-TR\n"
                   + counts_lines)
         gmap = os.path.join(tmp, "gmap.tsv")
         write_tsv(gmap, "gene_id\tsymbol\nENSG1\tEGFR\nENSG2\tKRAS\n")

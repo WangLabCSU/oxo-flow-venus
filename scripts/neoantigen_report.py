@@ -93,11 +93,12 @@ def read_tpm_map(counts_path, gene_map_path):
     opener = gzip.open if counts_path.endswith(".gz") else open
     try:
         with opener(counts_path) as fh:
-            # featureCounts writes its header line with a leading '#' and may
-            # emit repeated "Geneid" header rows — keep line 0 as the header,
-            # skip metadata/dupes, don't drop the header wholesale.
+            # featureCounts emits a '# Program:...' command line BEFORE the
+            # real "Geneid" header row — anchor on the Geneid line itself.
             lines = [ln.rstrip("\n") for ln in fh if ln.strip()]
-        header = lines[0].lstrip("#").strip().split("\t")
+        hidx = next(i for i, ln in enumerate(lines) if ln.startswith("Geneid"))
+        header = lines[hidx].split("\t")
+        lines = lines[hidx:]
         i_gene = header.index("Geneid") if "Geneid" in header else 0
         i_len = header.index("Length")
         i_cnt = len(header) - 1  # last column = the single sample

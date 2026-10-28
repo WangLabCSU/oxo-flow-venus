@@ -81,10 +81,11 @@ memory = "8G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p ref && \
+echo -e "gene_id\\tsymbol" > {output} && \
 awk -F'\\t' '$0 !~ /^#/ && $3 == "gene" { \
     match($9, /gene_id "[^"]+"/); gid = substr($9, RSTART+9, RLENGTH-10); \
     match($9, /gene_name "[^"]+"/); gname = substr($9, RSTART+11, RLENGTH-12); \
-    print gid "\\t" gname }' {input[0]} > {output}
+    print gid "\\t" gname }' {input[0]} >> {output}
 """
 
 # pVACseq on the plugin-annotated VCF. P0 predictor = MHCflurry (open
