@@ -119,11 +119,11 @@ python {config.venus_tools}/pvac_alleles.py \
 ALLELES=$(cat {output[1]}) && \
 PURITY_ARG=""; \
 [ -n "{config.neo_tumor_purity}" ] && PURITY_ARG="--tumor-purity {config.neo_tumor_purity}"; \
-pvacseq run {input[0]} {experiment} "$ALLELES" neoantigen/{pair_id}/run \
-    --prediction-algorithms {config.neo_predictors} \
+pvacseq run {input[0]} {experiment} "$ALLELES" \
+    {config.neo_predictors} neoantigen/{pair_id}/run \
     --binding-threshold {config.neo_binding_nm} \
     --percentile-threshold-strategy exploratory \
-    --tdna-vaf 0 --tdna-depth 0 \
+    --tdna-vaf 0 --tdna-cov 0 \
     --top-score-metric lowest \
     --n-threads {threads} \
     $PURITY_ARG \
