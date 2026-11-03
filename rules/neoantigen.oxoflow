@@ -25,7 +25,7 @@ memory = "32G"
 environment = { pixi = "envs/vep_perl/pixi.toml" }
 shell = """
 mkdir -p neoantigen/{pair_id} logs && \
-vep --input_file {input[0]} --output_file {output[0]} --vcf --force_overwrite \
+vep --input_file {input[0]} --output_file neoantigen/{pair_id}/vep_plugins.vcf --vcf --force_overwrite \
     --offline --cache --dir_cache {config.vep_perl_cache} \
     --assembly GRCh38 \
     --fasta {input[1]} \
@@ -33,7 +33,9 @@ vep --input_file {input[0]} --output_file {output[0]} --vcf --force_overwrite \
     --dir_plugins {config.vep_plugins_dir} \
     --plugin Wildtype --plugin Frameshift \
     2> {log} && \
-tabix -f -p vcf {output[0]}
+bgzip -@ 4 -c neoantigen/{pair_id}/vep_plugins.vcf > {output[0]} && \
+tabix -f -p vcf {output[0]} && \
+rm -f neoantigen/{pair_id}/vep_plugins.vcf
 """
 
 # SpecHLA HLA typing from the BQSR WGS BAM. Organoid/tumor-only caveat is
