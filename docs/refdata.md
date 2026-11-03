@@ -43,6 +43,8 @@ scripts/verify_refdata.sh    # from the repo root, on the reference host
 | ASCAT G1000 hg38 WGS set | `ascat_refdir` | ASCAT 3.2 / Zenodo 14008443 | see §8 |
 | MSIsensor reference list | (derived) | generated per run | see §9 |
 | Clinical KB (CIViC dump + ClinVar VCF) | `civic_*_tsv`, `clinvar_vcf` | CIViC monthly + ClinVar weekly | see §10 |
+| Neoantigen: Perl-VEP cache + plugins, MHCflurry models, SpecHLA db | `vep_perl_cache`, `vep_plugins_dir`, `mhcflurry_data_dir` | VEP 113 layout / MHCflurry 2.x models | see §11 |
+| ecDNA: AmpliconSuite data repo | `aa_data_repo` | suite install.sh bundle | see §12 |
 
 ---
 
@@ -219,7 +221,7 @@ each with `.tbi`:
 
 `msi_paired` does not consume an external MSI database: the reference list of
 microsatellite loci is **generated per cohort** from the genome FASTA by
-`msisensor-pro scan -d $genome_fa` (rule `msi_scan`, shared across pairs).
+`msisensor-pro scan -d $genome_fa` (rule `msisensor_scan`, shared across pairs).
 Its provenance is therefore exactly §1's FASTA — nothing to download.
 
 ---
@@ -290,6 +292,29 @@ tumor-only organoid cohort (near-clonal tumor; ASCAT needs matched normal) —
 pvactools then estimates purity directly from the variant VAFs. pvactools 7.x has
 no `--tumor-ploidy` argument. Class-II predictions report as not_run until DTU
 tools are installed.
+
+The offline-VEP deployment for this rule is SEPARATE from §5's vep-rs setup:
+config keys `vep_perl_cache` (standard Ensembl cache layout the Perl VEP can
+read — the vep-rs JSON cache is not) and `vep_plugins_dir` (Wildtype.pm +
+Frameshift.pm copied from Ensembl/VEP_plugins at the matching VEP release tag).
+Build both from the same Ensembl release-113 tarball §5 names; `scripts/
+prepare_neoantigen_ref.sh` audits the plugin dir.
+
+---
+
+## 12. ecDNA / AmpliconSuite data repo — `aa_data_repo`
+
+- **Path (config):** `/home/data/reference/aa_data_repo` (config key
+  `aa_data_repo`; ~27 GB with the GRCh38/GRCh38_viral/mm10 subdirs).
+- **Origin:** AmpliconSuite's own data repo, downloaded once with the suite's
+  `install.sh` (github.com/AmpliconSuite/AmpliconSuite-pipeline) — holds the
+  conserved-region seed blacklist (`GRCh38/conserved_gain5_hg38.bed`), gene
+  models, centromere gaps and the prebuilt tumor-only CNVkit reference
+  (`GRCh38/GRCh38_cnvkit_filtered_ref.cnn`) that `ampliconsuite` consumes via
+  the exported `AA_DATA_REPO` environment variable.
+- **Verify:** `scripts/verify_refdata.sh` checks the directory is non-empty
+  plus the three species subdirs and the CNVkit reference / seed blacklist
+  files named above.
 
 ---
 

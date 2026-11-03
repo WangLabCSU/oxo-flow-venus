@@ -6,6 +6,7 @@ routed by its basename so argument order does not matter:
   rna_qc_summary.tsv  - STAR bulk-RNA QC
   scrna_metrics.tsv   - single-cell metrics
   cohort_ascat.tsv    - ASCAT purity/ploidy cohort table
+  cohort_ecdna.tsv    - ecDNA counts cohort table
   msi_cohort.tsv      - MSI cohort table (BH-corrected)
   anything else       - per-pair TMB tables (concatenated)
 

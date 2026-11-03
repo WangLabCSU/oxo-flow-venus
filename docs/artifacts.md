@@ -175,6 +175,23 @@ chr-scattered pattern.
 | `scrna_integrate` ×1 | `scrna/cohort_clusters.tsv` | **A** | |
 | — | `outs/anno_decon_sorted.bam` + `.bai`, `outs/analysis/QC_Cluster.h5ad` (~1 GB/sample), `outs/singlecell.csv` (~98 MB/sample) | D | dnbc4tools side products: the BAM is scRNA's weakest asset (downstream reads matrices, not BAMs); the two per-cell results are terminal measurement outputs — S4's tarball archives them |
 
+### ecDNA (`rules/ecdna.oxoflow`)
+
+| Rule (×n) | Output | Class | Notes |
+|---|---|---|---|
+| `ampliconsuite` ×10 | `ecdna/{pair_id}/{pair_id}_{ecDNA_counts,gene_list,feature_basic_properties,amplicon_classification_profiles,result_table}.tsv` + `.suite_finished` | **A** | AmpliconClassifier products lifted from `<pair>_classification/`; the suite's internal CNVkit/AA intermediates stay D-class under their own `<pair>_*` dirs |
+| `ecdna_cohort` ×1 | `report/cohort_ecdna.tsv` + `report/ecdna_genes.tsv` | **A** | collected by `collect_ecdna.py` |
+
+### Neoantigen (`rules/neoantigen.oxoflow`, venus#31 — tumor_only == 'true' only)
+
+| Rule (×n) | Output | Class | Notes |
+|---|---|---|---|
+| `vep_reannotate_plugins` ×pairs | `neoantigen/{pair_id}/vep_plugins.vcf.gz` + `.tbi` | (undeclared-class: no marker) | plugin CSQ fields pVACtools requires; regenerable from the PASS VCF in minutes |
+| `hla_type_dna` ×DNA-samples | `hla/{sample}/hla.result.txt`, `hla/{sample}.alleles.tsv` | (undeclared-class) | SpecHLA typing; extract FASTQs under `hla/{sample}/` are D-class |
+| `gene_symbol_map` ×1 | `ref/gene_symbols.tsv` | (undeclared-class) | GTF-derived gene_id→symbol cache |
+| `pvacseq_run` ×pairs | `neoantigen/{pair_id}/filtered.tsv`, `alleles.txt` | (undeclared-class) | `run/` dir (MHC_Class_I predictions) is D-class scratch |
+| `neoantigen_report` ×pairs | `neoantigen/{pair_id}.{candidates.tsv,summary.tsv,report.md}` | (undeclared-class) | per-patient burden deliverables |
+
 ### Reports & cohort tables (`rules/report.oxoflow`)
 
 | Rule (×n) | Output | Class | Notes |
@@ -183,6 +200,8 @@ chr-scattered pattern.
 | `tmb_per_pair` ×10 | `report/tmb/{pair_id}.tmb.tsv` | **A** | detection result |
 | `scrna_metrics_cohort` ×1 | `report/scrna_metrics.tsv` | **A** | |
 | `msi_cohort` ×1 | `report/msi_cohort.tsv` | **A** | detection result |
+| `msi_cohort_tumoronly` | (same path) | — | defined, 0 instances (paired cohort) |
+| `ecdna_cohort` ×1 | `report/cohort_ecdna.tsv` + `report/ecdna_genes.tsv` | **A** | see ecDNA module table |
 | `cohort_tables` ×1 | `report/cohort_summary.tsv` | **A** | |
 | `clinical_report` ×1 | `report/venus_clinical_report.md` + `.html` | **A** | final deliverable |
 
@@ -237,10 +256,12 @@ convention the evidence/biomarker/therapy tables are declared
 
 ## Coverage statement
 
-Every `output` pattern in the 13 `rules/*.oxoflow` files (40 rules) appears
-exactly once above, classified. The 561-instance census sums to the live
-`completed_rules` count, and the declared-output total (1,553) equals the sum
-of pattern × instance across the tables. D-class entries were verified against
-the live workdir (`processed-wsx`, 2026-10) rather than inferred from tool
-docs. If a rule is added, regenerate the census with the snippet at the top
+The census tables above were generated when the repo had 13 rule files
+(40 rules); the manifest now holds **16 `rules/*.oxoflow` files (59 rules)**
+after the ecDNA/clinical/neoantigen additions — those module tables are
+included above, but the 561-instance / 1,553-file cohort census predates them
+and counts only the rules that existed in the reference `processed-wsx` run
+(`2026-10` ground truth). The per-instance counts for the newer modules depend
+on cohort mode (neoantigen rules instantiate only with `tumor_only=true`).
+If a rule is added, regenerate the census with the snippet at the top
 and extend the matching module table.

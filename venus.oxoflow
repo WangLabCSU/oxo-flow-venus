@@ -3,7 +3,7 @@
 # WGS/WES somatic calling (paired + tumor-only), structural variants (Manta),
 # microsatellite instability (MSIsensor-pro, paired), COSMIC SBS96 signature
 # fitting, CNV (CNVkit), bulk RNA-seq (STAR + featureCounts), single-cell
-# RNA-seq (dnbc4tools + scanpy), and a cohort clinical report whose methods
+# RNA-seq (dnbc4tools), and a cohort clinical report whose methods
 # section is generated from the commands that actually executed (rule_runs in
 # .oxo-flow/checkpoint.json).
 #
@@ -176,7 +176,6 @@ vep_perl_cache = "/home/data/reference/vep_cache_perl"
 
 # Pipeline helpers
 venus_tools = "scripts"
-workflow_file = "venus.oxoflow"
 
 # Samples whose raw FASTQs must exist as raw/<sample>_R1/R2 (WGS + bulk RNA
 # both feed fastp; WGS samples carry -TD/-B suffixes, bulk RNA -TR).
@@ -189,7 +188,13 @@ chromosomes = [
     "chr18", "chr19", "chr20", "chr21", "chr22", "chrX", "chrY",
 ]
 
-# Base-recalibration: "true"/"false" (string; tested with when = comparisons)
+# Base-recalibration: "true"/"false" (string; tested with when = comparisons).
+# CAUTION: "false" is currently NOT a runnable end-state — every consumer
+# (Mutect2, Manta, CNVkit, ASCAT, MSIsensor, AmpliconSuite, SpecHLA) consumes
+# bqsr/{sample}/{sample}.bqsr.bam(+.bai), and there is no companion rule that
+# publishes the un-recalibrated markdup BAM under that path. Setting it to
+# "false" yields a DAG with no producer for the whole downstream chain. Keep
+# "true" until such a companion rule exists (20261103 audit).
 run_bqsr = "true"
 
 # Cohort mode flag for report gating: "true" = tumor-only cohort (no pair in
