@@ -57,6 +57,9 @@ threads = 8
 memory = "32G"
 environment = { pixi = "envs/hla/pixi.toml" }
 shell = """
+# fresh-dir guard: SpecHLA reuses stale per-gene artifacts in an existing
+# outdir, silently emitting empty typing (2026-11-04 live incident)
+rm -rf hla/{sample} && \
 mkdir -p hla/{sample} logs/hla_type_dna && \
 spechla-extract-hla-reads -s {sample} -b {input[0]} -r hg38 -o hla/{sample} \
     > {log} 2>&1 && \
