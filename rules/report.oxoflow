@@ -7,17 +7,23 @@ description = "Cohort-level clinical report: methods from actual rule_runs, per-
 # The checkpoint lives in .oxo-flow/ (engine-owned, not a rule product): the
 # shell reads it at execution time, so it is not declared as rule input.
 # `report/cohort_summary.tsv` is declared as a REAL input dependency: it is the
-# join point of the analytical chain (TMB / RNA-QC / scRNA / ASCAT / MSI), so
-# this rule is scheduled at the END of the run, when the checkpoint is fully
+# join point of the analytical chain (TMB / RNA-QC / scRNA / ASCAT / MSI / ecDNA),
+# so this rule is scheduled at the END of the run, when the checkpoint is fully
 # populated. With only `config/pairs.tsv` as input the rule fired seconds
 # after launch, read an empty checkpoint and emitted an empty methods
-# section (#5).
+# section (#5). The clinical-chain cohort tables are declared for the same
+# reason: without them this rule could run CONCURRENTLY with the clinical rules
+# and snapshot a checkpoint that still lacked their records — the methods
+# section would then label clinical_kb_prep/clinical_snv_annotate/... as "no
+# checkpoint record" nondeterministically (20261103 audit).
 [[rules]]
 name = "methods_from_rule_runs"
 description = "Extract methods narrative from executed rule_runs"
 input = [
     "config/pairs.tsv",
     "report/cohort_summary.tsv",
+    "report/clinical_cohort.tsv",
+    "report/clinical_therapies_cohort.tsv",
 ]
 output = ["report/methods_section.md"]
 # Keep: report module outputs are the clinical deliverables.
@@ -149,7 +155,8 @@ printf '[msi_cohort_tumoronly] tumor-only cohort: header-only table (MSI needs a
 """
 
 # Cohort ecDNA table from the AmpliconClassifier outputs of the ampliconsuite
-# rule (ecdna/<pair>/<pair>_ecDNA_counts.tsv + _result_table.tsv). Works in
+# rule (ecdna/<pair>/<pair>_ecDNA_counts.tsv + _result_table.tsv +
+# _gene_list.tsv). Works in
 # BOTH cohort modes: the suite takes the tumor BAM only (its internal CNVkit
 # step is tumor-only via the AA_DATA_REPO prebuilt reference), so there is no
 # paired/tumor-only split here. 0-amplicon samples are safe: the suite still
@@ -160,6 +167,10 @@ description = "Collect per-pair ecDNA counts and oncogene hits into cohort table
 expand_inputs = [
     { pattern = "ecdna/{pair_id}/{pair_id}_ecDNA_counts.tsv", variables = { pair_id = "config.pairs_list" } },
     { pattern = "ecdna/{pair_id}/{pair_id}_result_table.tsv", variables = { pair_id = "config.pairs_list" } },
+    # collect_ecdna.py joins the amplicon classification onto <pair>_gene_list.tsv
+    # via the result_table's Feature ID — declare it so a re-run of the suite
+    # that changes the gene list also invalidates this table (20261103 audit).
+    { pattern = "ecdna/{pair_id}/{pair_id}_gene_list.tsv", variables = { pair_id = "config.pairs_list" } },
 ]
 output = [
     "report/cohort_ecdna.tsv",

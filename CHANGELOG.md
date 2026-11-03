@@ -12,6 +12,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Wildtype/Frameshift), pVACseq MHCflurry prediction, burden report with
   expression filter and honest tumor-only/class-II disclosures
 
+### Changed (20261103 full-repo audit)
+- `methods_from_rule_runs` now also declares `report/clinical_cohort.tsv` +
+  `report/clinical_therapies_cohort.tsv` as inputs: without them the rule ran
+  concurrently with the clinical chain and could snapshot a checkpoint missing
+  the clinical records (methods rows nondeterministically labelled "no
+  checkpoint record"). NOTE: rule-input changes stale the report chain — sync
+  workdirs in a planned re-run window.
+- `ecdna_cohort` declares `ecdna/<pair>/<pair>_gene_list.tsv` (it was already
+  read by `collect_ecdna.py` via a side path, so gene-list changes could not
+  invalidate the cohort table).
+- `manta_paired` gains the `rm -rf manta/<pair>` retry guard its tumor-only
+  sibling already had (configManta.py refuses an existing runDir, so a retry
+  after a failed runWorkflow previously failed forever). Same staleness note.
+- README: module list completed (ascat/ecDNA/clinical/neoantigen were missing),
+  scanpy attribution dropped (no rule uses it), engine requirement corrected to
+  ≥ 0.24 + commit a456c796, and the unsafe `--arg run_bqsr=false` example
+  replaced (run_bqsr=false currently leaves the whole somatic chain without a
+  producer — documented in venus.oxoflow).
+- `docs/refdata.md`: rule name `msi_scan` → `msisensor_scan`; new §12 documents
+  the AmpliconSuite `aa_data_repo`; §11 now covers the Perl-VEP cache/plugin
+  deployment; the asset table gains the neoantigen + ecDNA rows.
+- `docs/artifacts.md`: coverage statement updated to the current manifest size
+  (16 files / 59 rules; the 561-instance census predates the newer modules);
+  ecDNA and neoantigen module tables added; `msi_cohort_tumoronly` and
+  `ecdna_cohort` rows added to the reports table.
+- Script docstrings corrected: `cohort_tables.py` (ecdna route was implemented
+  but undocumented), `tmb_from_maf.py` (the "Precision"-qualified drop claim
+  was never implemented). Dead config key `workflow_file` removed.
+
 ### Fixed
 - neoantigen post-audit (independent review): pvacseq input must be the
   plugin-annotated VCF (pvactools hard-requires FrameshiftSequence/

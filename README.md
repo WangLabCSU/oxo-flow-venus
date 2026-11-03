@@ -18,7 +18,7 @@
 | MSI | MSIsensor-pro (paired only) | `deliver/{pair}.msi.tsv` |
 | Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
 | Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics |
-| Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`), scanpy | count matrix, QC/clustering metrics |
+| Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`); QC summaries in dependency-light Python | count matrix, QC/clustering metrics |
 | Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
 
 Analysis modes:
@@ -79,8 +79,9 @@ or `-s 2` (reverse) in `rules/rna.oxoflow`.
 ```
 venus.oxoflow        # main workflow: config + include list + chromosome scatter
 rules/*.oxoflow      # rule fragments (qc, align, varcall, varcall_merge, annotation,
-                     #   cnv, sv, msi, signature, rna, scrna, report)
-scripts/             # python helpers (MAF conversion, TMB, SBS96 fit, cohort tables,
+                     #   cnv, ascat, sv, msi, signature, rna, scrna, ecdna, clinical,
+                     #   neoantigen, report)
+scripts/             # python/R helpers (MAF conversion, TMB, SBS96 fit, cohort tables,
                      #   clinical report, …) + clean_intermediates.sh (disk cleanup)
 docs/                # method rationale, reference data, cleanup guide +
                      #   artifacts.md (full output inventory & cleanup classes)
@@ -208,7 +209,7 @@ strategy treats it is catalogued in
 
 ## Requirements
 
-- Linux x86-64, oxo-flow CLI ≥ 0.23
+- Linux x86-64, oxo-flow CLI ≥ 0.24 (the `[engine]` disk-pressure guard additionally needs engine commit `a456c796`+ — PR #845)
 - [pixi](https://pixi.sh) on PATH (workflow environments are resolved per rule into `.oxo-flow/pixi/`)
 - Reference data (see `venus.oxoflow [config]` for the exact keys): GRCh38 FASTA + BWA-MEM2 index, STAR index + GENCODE GTF, GATK resource bundle (dbsnp/mills/gnomad/PoN), vep-rs binary + JSON cache, single-cell reference for dnbc4tools, CNVkit normal reference for tumor-only CNV.
 
@@ -235,11 +236,16 @@ oxo-flow run --background
 Every config key can be overridden per run without editing the file:
 
 ```bash
-oxo-flow run --arg run_bqsr=false --arg target_bed=/data/exome.bed \
+oxo-flow run --arg target_bed=/data/exome.bed \
   --arg mutect_target_args="-L /data/exome.bed" --arg cnv_method=hybrid \
   --arg cnv_targets_args="--targets /data/exome.bed" --arg sv_exome_args="--exome" \
   --arg tmb_target_args="--target-bed /data/exome.bed" --arg msi_coverage=20
 ```
+
+Note: `run_bqsr=false` is NOT a runnable end-state yet — every downstream
+caller consumes `bqsr/{sample}/{sample}.bqsr.bam` and no companion rule
+publishes the un-recalibrated BAM under that path, so the flag would leave
+the whole somatic chain without a producer (see `venus.oxoflow`).
 
 ## Outputs of note
 

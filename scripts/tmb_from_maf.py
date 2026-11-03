@@ -14,9 +14,9 @@ denominators:
   the honest denominator for WES.
 
 Counting rules: 'count' = unique (Chromosome, Start_Position, End_Position,
-Reference_Allele, Tumor_Seq_Allele2); 'coding' keeps only coding classes
-(non-silent) after dropping 'Precision'-qualified rows. # comment lines and
-version banners are skipped.
+Reference_Allele, Tumor_Seq_Allele2); 'coding' keeps only rows whose
+Variant_Classification is in the non-silent coding class set. # comment lines
+and version banners are skipped.
 """
 from __future__ import annotations
 

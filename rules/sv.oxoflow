@@ -44,8 +44,12 @@ threads = 8
 memory = "32G"
 environment = { pixi = "envs/sv/pixi.toml" }
 when = "wildcard.control != ''"
+# rm -rf first (same guard as manta_tumoronly): configManta.py refuses an
+# existing runDir, so without it a retry after a failed runWorkflow would
+# fail forever on the leftover directory.
 shell = """
 mkdir -p manta logs && \
+rm -rf manta/{pair_id} && \
 configManta.py \
     --normalBam {input[1]} \
     --tumorBam {input[0]} \
