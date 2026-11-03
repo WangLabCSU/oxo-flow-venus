@@ -266,10 +266,15 @@ auditable; named events without residue coordinates (e.g. MET
 Verification is integrated into `scripts/verify_refdata.sh` (column-shape
 checks on the TSVs; WARN-only until first download, like §7).
 
-OncoKB (optional enrichment, `oncokb_token_file` in config) has **no local dump**:
-the rule queries the REST API at run time with a free academic token from
+OncoKB (optional enrichment, `oncokb_token_file` in config) has **no public
+bulk download** — the REST API with a free academic token from
 <https://www.oncokb.org/api-access> (institutional email; Chakravarty et al.
-2017, JCO PO).
+2017, JCO PO) is the only official channel, and OncoKB content must NOT be
+committed into any repository (redistribution restricted). Deployment mode:
+`scripts/prepare_oncokb_snapshot.sh` pulls genes/drugs/per-gene alterations
+once into `/home/data/reference/oncokb/<date>/` (md5 manifest; demo host
+`https://demo.oncokb.org/api/v1` serves a 3-gene subset for connectivity
+checks), monthly refresh; rules then read the local snapshot offline.
 
 ---
 
