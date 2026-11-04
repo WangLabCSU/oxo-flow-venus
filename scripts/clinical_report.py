@@ -331,6 +331,29 @@ CLINICAL_NOT_RUN = (
     "rotated out of the checkpoint window)._\n"
 )
 
+WGS_ALIGNQC_NOTE = (
+    "_Metrics from samtools flagstat/stats and mosdepth (1Mb windows, "
+    "10x/20x thresholds) on the BQSR BAMs. **Sex check** is a "
+    "coverage-based screen: chrX/chrY means vs autosome mean "
+    "(M: X/A<0.75 and Y/A>=0.05; F: X/A>=0.85 and Y/A<=0.02; else "
+    "ambiguous) — the cohort has no recorded sex metadata, so treat it "
+    "as a hypothesis to review, not a sample-sheet correction. "
+    "**Cross-sample contamination is NOT assessed** (VerifyBamID2 "
+    "freemix needs a 1000G genotype reference panel — deferred to P2)._\n"
+)
+
+FUSION_SCREEN_NOTE = (
+    "_Screening-level fusion candidates from STAR split-read chimeric "
+    "junctions (chimSegmentMin 12, unique-mapping only), gene-annotated "
+    "against GENCODE and matched to the actionable fusion panel. NO "
+    "spanning-fragment support, transcript reconstruction, or "
+    "RT-artifact filtering — every positive requires orthogonal RNA "
+    "confirmation (FISH/RT-PCR/panel) before clinical use. This table "
+    "COMPLEMENTS, not replaces, the Manta BND screen in the clinical "
+    "interpretation section: the two modalities see different evidence "
+    "classes (RNA junctions vs gDNA breakpoints)._\n"
+)
+
 
 def clinical_markdown(path: str, therapies_path: str = "",
                       title: str = "Clinical interpretation") -> str:
@@ -398,6 +421,10 @@ def main() -> int:
     ap.add_argument("--clinical-therapies",
                     help="cohort therapy options table")
     ap.add_argument("--rna-qc")
+    ap.add_argument("--alignqc",
+                    help="WGS per-sample alignment QC table (N10/N11)")
+    ap.add_argument("--fusion-screen",
+                    help="cohort RNA fusion screening table (N12)")
     ap.add_argument("--scrna-metrics")
     ap.add_argument("--methods", help="methods Markdown fragment")
     ap.add_argument("--pairs", help="config/pairs.tsv")
@@ -470,6 +497,26 @@ def main() -> int:
 
     parts.append("## Bulk RNA-seq alignment QC\n")
     parts.append(tsv_markdown(args.rna_qc, title="STAR alignment metrics"))
+
+    if args.alignqc:
+        parts.append("## WGS alignment QC (per sample)\n")
+        parts.append(WGS_ALIGNQC_NOTE)
+        parts.append(tsv_markdown(
+            args.alignqc, title="mapping / duplicates / depth / coverage",
+            only=["sample", "total_reads", "mapped_pct", "duplicate_pct",
+                  "insert_size_median", "mean_depth", "coverage_10x_pct",
+                  "coverage_20x_pct", "sex_x_ratio", "sex_y_ratio",
+                  "predicted_sex", "contamination_freemix"]))
+
+    if args.fusion_screen:
+        parts.append("## RNA fusion screening (STAR chimeric junctions)\n")
+        parts.append(FUSION_SCREEN_NOTE)
+        parts.append(tsv_markdown(
+            args.fusion_screen,
+            title="fusion screening candidates (panel hits first)",
+            only=["sample", "fusion_pair", "breakpoint_a", "breakpoint_b",
+                  "split_reads", "panel_hit", "panel_label",
+                  "evidence_class"]))
 
     parts.append("## Single-cell QC\n")
     parts.append(tsv_markdown(args.scrna_metrics, title="scRNA metrics"))

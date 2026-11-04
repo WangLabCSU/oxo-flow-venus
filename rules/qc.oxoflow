@@ -84,7 +84,8 @@ fastqc --threads {threads} --outdir qc/fastqc {input} 2> {log}
 # file CONTENT — the issue #9 junk row came from a roff man page
 # (samtools-flagstat.1) whose text embeds a flagstat summary — so the fix is
 # a whitelist of QC output roots, not a filename filter: the shell scans
-# qc/trim qc/fastqc scrna/fastqc align rna/star rna/counts. A whole-workdir
+# qc/trim qc/fastqc scrna/fastqc qc/alignqc align rna/star rna/counts
+# (qc/alignqc added 20261104: flagstat/stats/mosdepth from wgs_* rules). A whole-workdir
 # scan (`multiqc .`) stays forbidden: the engine's pixi envs live inside the
 # workdir (envs/<group>/.pixi/envs/…), and a recursive sweep re-parses those
 # env files. expand_inputs mirrors every scanned root (config.samples_<group>
@@ -116,6 +117,9 @@ expand_inputs = [
     { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_DNA" } },
     { pattern = "qc/fastqc/{sample}_R2.trim_fastqc.html", variables = { sample = "config.samples_bulkRNA" } },
     { pattern = "align/{sample}/{sample}.dup_metrics.txt", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.flagstat", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.stats", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.mosdepth.summary.txt", variables = { sample = "config.samples_DNA" } },
     { pattern = "scrna/fastqc/{sample}_SC_R1_fastqc.html", variables = { sample = "config.samples_scRNA" } },
     { pattern = "scrna/fastqc/{sample}_SC_R2_fastqc.html", variables = { sample = "config.samples_scRNA" } },
     { pattern = "rna/star/{sample}/{sample}.Log.final.out", variables = { sample = "config.samples_bulkRNA" } },
@@ -128,6 +132,119 @@ memory = "8G"
 environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/multiqc logs && \
-multiqc qc/trim qc/fastqc scrna/fastqc align rna/star rna/counts \
+multiqc qc/trim qc/fastqc scrna/fastqc qc/alignqc align rna/star rna/counts \
   --filename multiqc_report --outdir qc/multiqc --force 2> {log}
+"""
+
+# ---------------------------------------------------------------------------
+# Per-sample WGS alignment QC (N10/N11, audit 20261104): flagstat + stats +
+# mosdepth on the analysis-ready (BQSR) BAMs, then one collector per cohort.
+# Outputs live in qc/alignqc/ — added to the multiqc scan whitelist below so
+# MultiQC's samtools/stats, samtools/flagstat and mosdepth modules pick them
+# up (all three match by content, immune to naming).
+# ---------------------------------------------------------------------------
+[[rules]]
+name = "wgs_flagstat"
+description = "samtools flagstat on the BQSR BAM (mapping rate / duplicates)"
+when = "wildcard.assay == 'wgs'"
+input = [
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+output = ["qc/alignqc/{sample}.flagstat"]
+# Keep: QC measurement, feeds the collector + protected MultiQC report.
+protected_output = ["qc/alignqc/{sample}.flagstat"]
+log = "logs/wgs_flagstat/{sample}.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+mkdir -p qc/alignqc logs/wgs_flagstat && \
+samtools flagstat {input[0]} > {output} 2> {log}
+"""
+
+[[rules]]
+name = "wgs_bamstats"
+description = "samtools stats on the BQSR BAM (insert size distribution / GC)"
+when = "wildcard.assay == 'wgs'"
+input = [
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+output = ["qc/alignqc/{sample}.stats"]
+# Keep: QC measurement, feeds the collector + protected MultiQC report.
+protected_output = ["qc/alignqc/{sample}.stats"]
+log = "logs/wgs_bamstats/{sample}.log"
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+mkdir -p qc/alignqc logs/wgs_bamstats && \
+samtools stats -@ {threads} {input[0]} > {output} 2> {log}
+"""
+
+# mosdepth depth/coverage profile. --by 1000000 tiles the reference into 1Mb
+# windows (regions.bed.gz instead of the ~100GB-class whole-genome per-base
+# output), --thresholds counts bases >= 10x/20x per window so the collector
+# gets genome-wide coverage fractions without per-base data on disk.
+# Windows + thresholds are what N11's sex check avoids needing a separate run
+# for: summary.txt carries per-chromosome means (chrX/chrY vs autosome).
+[[rules]]
+name = "wgs_mosdepth"
+description = "mosdepth depth profile on the BQSR BAM (1Mb windows + 10x/20x)"
+when = "wildcard.assay == 'wgs'"
+input = [
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+output = [
+    "qc/alignqc/{sample}.mosdepth.summary.txt",
+    "qc/alignqc/{sample}.mosdepth.thresholds.bed.gz",
+    "qc/alignqc/{sample}.mosdepth.regions.bed.gz",
+]
+# Keep summary + thresholds (collector + MultiQC inputs). regions.bed.gz and
+# the side products global.dist.txt / *.dist.txt are declared-not-protected:
+# KB-MB scale, regenerable, deletable by clean (class C).
+protected_output = [
+    "qc/alignqc/{sample}.mosdepth.summary.txt",
+    "qc/alignqc/{sample}.mosdepth.thresholds.bed.gz",
+]
+log = "logs/wgs_mosdepth/{sample}.log"
+threads = 4
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+mkdir -p qc/alignqc logs/wgs_mosdepth && \
+cd qc/alignqc && \
+mosdepth --by 1000000 --thresholds 10,20 --threads {threads} \
+    {sample} ../../{input[0]} \
+    2> ../../{log} && \
+cd ../..
+"""
+
+# Collector: one row per DNA sample -> mapping rate / duplicate rate / insert
+# size / GC / depth / >=10x,20x fractions / sex-check (N11) / contamination
+# disclosure. Empty expand (no DNA group) yields a header-only table so the
+# report chain stays resolvable for scRNA-only cohorts.
+[[rules]]
+name = "wgs_alignqc_summary"
+description = "Collect per-sample WGS alignment QC into cohort table (incl. sex check)"
+expand_inputs = [
+    { pattern = "qc/alignqc/{sample}.flagstat", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.stats", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.mosdepth.summary.txt", variables = { sample = "config.samples_DNA" } },
+    { pattern = "qc/alignqc/{sample}.mosdepth.thresholds.bed.gz", variables = { sample = "config.samples_DNA" } },
+]
+output = ["qc/alignqc/wgs_alignqc_summary.tsv"]
+# Keep: report-facing QC table (cohort_tables + clinical_report).
+protected_output = ["qc/alignqc/wgs_alignqc_summary.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p qc/alignqc logs && \
+python {config.venus_tools}/collect_alignqc.py \
+    --inputs {input} \
+    --output {output} \
+    2> logs/wgs_alignqc_summary.log
 """

@@ -17,12 +17,15 @@ output = [
     "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
     "rna/star/{sample}/{sample}.Log.final.out",
     "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
+    "rna/star/{sample}/{sample}.Chimeric.out.junction",
 ]
 # Keep the small QC products (Log.final.out feeds rna_qc_summary,
 # ReadsPerGene.out.tab feeds quick counts) plus the aligned BAM: the BAM is
 # the archive-grade RNA product (junction discovery / IGV / re-counting
 # without re-alignment) and costs only ~31 GB cohort-wide — cheap insurance
 # next to the days-scale DNA realignment a loss would piggyback on.
+# Chimeric.out.junction is the input of rna_fusion_screen (N12 audit 20261104):
+# KB-scale per sample, keep with the other QC products.
 # The read-group platform comes from config.read_group_platform (same key the
 # DNA-side bwa_mem2 params use), so DNA and RNA BAMs always agree. NOTE: the
 # engine fingerprints the shell template, so editing this rule stales the
@@ -32,10 +35,22 @@ protected_output = [
     "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
     "rna/star/{sample}/{sample}.Log.final.out",
     "rna/star/{sample}/{sample}.ReadsPerGene.out.tab",
+    "rna/star/{sample}/{sample}.Chimeric.out.junction",
 ]
 threads = 16
 memory = "64G"
 environment = { pixi = "envs/rna/pixi.toml" }
+# Chimera detection (N12 audit 20261104): emits Chimeric.out.junction (one row
+# per split read) for the fusion screen. STAR writes this file only when
+# "Junctions" is present in --chimOutType (default WithinBAM HardClip writes
+# NONE), hence the explicit flag trio. chimSegmentMin 12 / overhang 12 follow
+# the STAR-Fusion recommended sensitivity settings; chimMultimapNmax stays at
+# the default 0 (unique-mapping chimeras only, screening-level specificity).
+# WithinBAM SoftClip keeps chimeric alignments in the main BAM (IGV-visible);
+# featureCounts already excludes chimeric fragments (-C), so the count matrix
+# is unaffected. Enabling chimera flags changes the STAR fingerprint: the next
+# run re-aligns every bulkRNA sample (a full re-run window is required — plan
+# accordingly, see README "Operating on a run workdir").
 shell = """
 mkdir -p rna/star/{sample} logs/rna_star && \
 STAR \
@@ -47,11 +62,19 @@ STAR \
     --twopassMode Basic \
     --outSAMtype BAM SortedByCoordinate \
     --quantMode GeneCounts \
+    --chimSegmentMin 12 \
+    --chimOutType WithinBAM SoftClip Junctions \
+    --chimJunctionOverhangMin 12 \
     --outSAMattrRGline ID:{sample} SM:{sample} PL:{config.read_group_platform} \
     2> logs/rna_star/{sample}.log
 """
 
 # featureCounts gene-level counts (uses the STAR BAM).
+# Strandedness is configurable via config.featurecounts_strandedness (venus.oxoflow;
+# "0" = unstranded, this cohort's verified default; N14 audit 20261104). The
+# explicit -s flag renders identically to the previous implicit default
+# (featureCounts -s 0), but the template change stales completed featurecounts
+# instances — a re-run reproduces byte-identical counts under -s 0.
 [[rules]]
 name = "featurecounts"
 description = "Gene-level quantification with featureCounts"
@@ -81,6 +104,7 @@ featureCounts \
     -t exon -g gene_id \
     -p --countReadPairs \
     -B -C \
+    -s {config.featurecounts_strandedness} \
     {input[0]} \
     2> logs/featurecounts_{sample}.log
 """
@@ -122,4 +146,63 @@ python {config.venus_tools}/summarize_star_logs.py \
     --logs {input} \
     --output {output} \
     2> logs/rna_qc_summary.log
+"""
+
+# Per-sample RNA fusion screen (N12 audit 20261104) — parse STAR's
+# Chimeric.out.junction (split-read evidence only) and annotate gene names from
+# the GENCODE GTF. This is a SCREENING-level pass, not a fusion caller: no
+# spanning-fragment support, no transcript reconstruction, no RT-artifact
+# filtering (those are STAR-Fusion's job — see README P2 note). Every row
+# carries the screening disclosure; panel hits (actionable_fusion_pairs.tsv,
+# same table the Manta BND screen uses) are flagged for priority review.
+[[rules]]
+name = "rna_fusion_screen"
+description = "Screen STAR chimeric junctions into fusion candidates (screening-level)"
+when = "wildcard.assay == 'rnaseq'"
+input = [
+    "{config.venus_tools}/fusion_screen.py",
+    "rna/star/{sample}/{sample}.Chimeric.out.junction",
+    "{config.gencode_gtf}",
+    "resources/clinical/actionable_fusion_pairs.tsv",
+]
+output = ["rna/fusion/{sample}.fusion_candidates.tsv"]
+# Keep: per-sample screening evidence feeds the cohort fusion table.
+protected_output = ["rna/fusion/{sample}.fusion_candidates.tsv"]
+log = "logs/rna_fusion_screen_{sample}.log"
+threads = 2
+memory = "16G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p rna/fusion logs && \
+python {config.venus_tools}/fusion_screen.py \
+    --junction {input[1]} \
+    --gtf {input[2]} \
+    --panel {input[3]} \
+    --sample {sample} \
+    --output {output} \
+    2> {log}
+"""
+
+# Cohort fusion screening table: concat per-sample candidates, panel hits
+# first, then by split-read support. Rendered by clinical_report as the RNA
+# fusion screening section, disclosed alongside (not replacing) the Manta BND
+# panel from clinical_sv_fusions_{paired,tumoronly}.
+[[rules]]
+name = "rna_fusion_cohort"
+description = "Concat per-sample fusion candidates into cohort table (panel hits first)"
+expand_inputs = [
+    { pattern = "rna/fusion/{sample}.fusion_candidates.tsv", variables = { sample = "config.samples_bulkRNA" } },
+]
+output = ["report/fusion_screen_cohort.tsv"]
+# Keep: report-facing fusion screening table.
+protected_output = ["report/fusion_screen_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/collect_fusion.py \
+    --inputs {input} \
+    --output {output} \
+    2> logs/collect_fusion.log
 """

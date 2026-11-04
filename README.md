@@ -7,6 +7,7 @@
 | Module | Tools | Outputs |
 |---|---|---|
 | QC | fastp, FastQC, MultiQC | trimmed FASTQs, `qc/multiqc/multiqc_report.html` |
+| QC (WGS align) | samtools flagstat/stats, mosdepth | per-sample `qc/alignqc/` metrics + `wgs_alignqc_summary.tsv` (incl. sex check) |
 | DNA alignment | BWA-MEM2, Picard MarkDuplicates, GATK BQSR | sorted BAM + BAI per sample |
 | Somatic calling | GATK Mutect2 (per-chromosome scatter) + FilterMutectCalls with orientation-bias priors | per-pair VCF (PASS), `stats`, MAF |
 | Annotation | vep-rs (JSON cache) → VCF + MAF | `deliver/{pair}.somatic.pass.vep.vcf.gz`, `deliver/{pair}.maf` |
@@ -17,7 +18,7 @@
 | SV | Manta (paired somatic + tumor-only candidates; `--exome` for WES) | `deliver/{pair}.sv.vcf.gz` (PASS, paired) or `deliver/{pair}.sv.candidate.vcf.gz` (unscored, tumor-only) |
 | MSI | MSIsensor-pro (paired only) | `deliver/{pair}.msi.tsv` |
 | Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
-| Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics |
+| Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics, fusion screening candidates |
 | Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`); QC summaries in dependency-light Python | count matrix, QC/clustering metrics |
 | Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
 
@@ -58,11 +59,14 @@ Platforms: BGI (DNBSEQ/MGISEQ) and Illumina FASTQs are interchangeable downstrea
 
 ## Library strandedness
 
-`featureCounts` runs **unstranded** (`-s 0`, the rule sets no `-s` flag). For
-the bulk RNA-seq data this was verified empirically rather than assumed — on a
-200k read-pair subset of one sample aligned with STAR (93.4% unique, 147k
-spliced reads), three independent read-geometry checks against GENCODE exon
-structure all landed at ~50/50:
+`featureCounts` strand mode is **configurable** via
+`featurecounts_strandedness` in `venus.oxoflow` (default `"0"` = unstranded;
+`"1"` = sense/forward, `"2"` = antisense/reverse; override per run with
+`--arg featurecounts_strandedness=2`). The unstranded default was verified
+empirically for this cohort rather than assumed — on a 200k read-pair subset
+of one sample aligned with STAR (93.4% unique, 147k spliced reads), three
+independent read-geometry checks against GENCODE exon structure all landed at
+~50/50:
 
 | Check | Same-strand as R1 | Opposite | Verdict |
 |---|---|---|---|
@@ -71,8 +75,64 @@ structure all landed at ~50/50:
 | R1 vs splice-donor GT/CT motif from FASTA | 49.4% | 50.6% | unstranded |
 
 Unstranded counting is strand-agnostic and remains correct regardless of the
-true library type; if your own library is known stranded, set `-s 1` (forward)
-or `-s 2` (reverse) in `rules/rna.oxoflow`.
+true library type. If your own library is known stranded, set the config key
+accordingly — and verify first: a stranded library counted with the wrong
+`-s` silently halves or zeroes counts. Changing the value invalidates the
+featurecounts instances and every downstream consumer of the count matrix
+(merge_counts, neoantigen expression filter) on the next run.
+
+## WGS alignment QC and sex check (per sample)
+
+Every DNA sample gets `samtools flagstat` (mapping rate / duplicates),
+`samtools stats` (insert-size distribution / GC) and a `mosdepth` depth
+profile (`--by 1000000 --thresholds 10,20`: 1Mb windows + ≥10x/20x base
+fractions — no whole-genome per-base file on disk) on the analysis-ready BQSR
+BAM. `scripts/collect_alignqc.py` aggregates them into
+`qc/alignqc/wgs_alignqc_summary.tsv` (one row per sample), which feeds
+MultiQC, `report/cohort_summary.tsv` and the clinical report's WGS QC
+section.
+
+The summary also carries the **sex check** (`predicted_sex`): mosdepth
+per-chromosome means vs autosome mean — M if X/A<0.75 and Y/A≥0.05, F if
+X/A≥0.85 and Y/A≤0.02, else `ambiguous` (constants disclosed in the
+collector; report renders them too). The cohort has no recorded sex metadata,
+so treat every call as a coverage-based hypothesis to review, not a
+sample-sheet correction. **Cross-sample contamination is NOT assessed** —
+VerifyBamID2/freemix requires a 1000G genotype reference panel (SVDP bundle)
+and meaningful cohort density; deferred to P2. The
+`contamination_freemix` column carries an explicit `not_assessed` marker so
+downstream tables never present a blank as a measurement.
+
+## RNA fusion screening (screening-level)
+
+`star_align` runs with `--chimSegmentMin 12 --chimOutType WithinBAM SoftClip
+Junctions --chimJunctionOverhangMin 12` (STAR-Fusion sensitivity settings,
+unique-mapping chimeras only) and keeps `Chimeric.out.junction` per sample.
+`scripts/fusion_screen.py` aggregates split reads per junction, recomputes
+anchor lengths from the p-extended CIGARs, annotates both breakpoints against
+the GENCODE gene spans and flags hits against the curated
+`actionable_fusion_pairs.tsv`. Output:
+`rna/fusion/{sample}.fusion_candidates.tsv` →
+`report/fusion_screen_cohort.tsv` → clinical report "RNA fusion screening"
+section.
+
+This is **screening-level, not a fusion caller** — no spanning-fragment
+support, no transcript reconstruction, no RT-artifact filtering. Every row
+carries the screening disclosure; positives require orthogonal RNA
+confirmation (FISH/RT-PCR/panel). It COMPLEMENTS the Manta BND screen (RNA
+junctions vs gDNA breakpoints see different evidence classes), it does not
+replace it. Full reconstruction (STAR-Fusion) needs its own CTAT genome lib
+index (~tens of GB) — P2.
+
+## scRNA ambient/doublet: not assessed
+
+dnbc4tools 3.0 does not report ambient-RNA or doublet metrics, so
+`report/scrna_metrics.tsv` carries explicit `not_assessed(tool_lacks)`
+markers in the `ambient_pct` / `doublet_pct` columns (never blanks or zeros —
+report consumers can tell "never measured" from "measured 0"). The protected
+per-sample `raw_matrix/` trios are kept precisely so that a P2 pass with
+scDblFinder/DecontX (scanpy ecosystem) can compute both without re-running
+the dnbc4tools count.
 
 ## Repository layout
 
@@ -258,6 +318,8 @@ the whole somatic chain without a producer (see `venus.oxoflow`).
 - `report/tmb/{pair_id}.tmb.tsv` — TMB under two conventions: `tmb_mut_per_mb` (coding non-silent per coding Mb — clinical, ≥10 mut/Mb cutoff) and `all_somatic_mut_per_mb` (all PASS per target Mb — WGS literature convention)
 - `report/venus_clinical_report.html` — cohort report; its methods section is generated from `rule_runs` in `.oxo-flow/checkpoint.json`, so it always describes the commands that actually executed
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
+- `qc/alignqc/wgs_alignqc_summary.tsv` — per-sample WGS mapping rate, duplicate rate, depth, ≥10x/20x fractions, insert-size median, sex check (screening-level; contamination explicitly not_assessed)
+- `report/fusion_screen_cohort.tsv` — RNA fusion screening candidates (panel hits first; screening-level, needs orthogonal confirmation)
 
 ## License
 

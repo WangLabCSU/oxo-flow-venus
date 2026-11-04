@@ -1,4 +1,6 @@
-# Venus QC environment — reads trimming, per-sample QC reports, cohort aggregation.
+# Venus QC environment — reads trimming, per-sample QC reports, cohort
+# aggregation, and (20261104) the WGS alignment-QC block: samtools
+# flagstat/stats + mosdepth depth profile (rules/qc.oxoflow wgs_* rules).
 # Referenced by rules/qc.oxoflow via `environment = { pixi = "envs/qc/pixi.toml" }`.
 [workspace]
 name = "venus-qc"
@@ -9,3 +11,10 @@ platforms = ["linux-64"]
 fastp = ">=0.24"
 fastqc = ">=0.12.1"
 multiqc = ">=1.25"
+# WGS alignment QC (N10/N11): version floor matches the envs/align and
+# envs/rna samtools builds already validated on this deployment.
+samtools = ">=1.21"
+# Depth/coverage profile: mosdepth 0.3.10 (bioconda latest; 2026-11). Rule
+# uses --by 1000000 --thresholds 10,20 (windowed output — no whole-genome
+# per-base file on disk).
+mosdepth = ">=0.3.10"

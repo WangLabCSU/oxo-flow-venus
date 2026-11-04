@@ -206,6 +206,7 @@ name = "cohort_tables"
 description = "Outer-join per-module tables into patient-level cohort summary"
 input = [
     "rna/qc/rna_qc_summary.tsv",
+    "qc/alignqc/wgs_alignqc_summary.tsv",
     "report/scrna_metrics.tsv",
     "ascat/cohort_ascat.tsv",
     "report/cohort_ecdna.tsv",
@@ -239,6 +240,8 @@ input = [
     "report/methods_section.md",
     "report/cohort_summary.tsv",
     "rna/qc/rna_qc_summary.tsv",
+    "qc/alignqc/wgs_alignqc_summary.tsv",
+    "report/fusion_screen_cohort.tsv",
     "report/scrna_metrics.tsv",
     "notes/interpretation.md",
     "ascat/cohort_ascat.tsv",
@@ -265,13 +268,15 @@ python {config.venus_tools}/clinical_report.py \
     --methods {input[0]} \
     --tmb {input[1]} \
     --rna-qc {input[2]} \
-    --scrna-metrics {input[3]} \
-    --notes {input[4]} \
-    --ascat {input[5]} \
-    --ecdna {input[6]} \
-    --msi {input[7]} \
-    --clinical {input[8]} \
-    --clinical-therapies {input[9]} \
+    --alignqc {input[3]} \
+    --fusion-screen {input[4]} \
+    --scrna-metrics {input[5]} \
+    --notes {input[6]} \
+    --ascat {input[7]} \
+    --ecdna {input[8]} \
+    --msi {input[9]} \
+    --clinical {input[10]} \
+    --clinical-therapies {input[11]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \
