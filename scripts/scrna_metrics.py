@@ -6,6 +6,12 @@ headered table depending on version). We normalize whatever it emits into one
 row per sample with the metrics that matter for cohort QC: estimated cells,
 mean reads per cell, median UMI, sequencing saturation.
 
+N13 (audit 20261104): dnbc4tools 3.0 has NO ambient-RNA or doublet metrics —
+those columns are emitted as an explicit not_assessed marker (NOT blank, NOT
+zero) so report consumers can tell "never measured" apart from "measured 0".
+If a future dnbc4tools version starts reporting them, the KEY_ALIASES entries
+promote the real values automatically.
+
 Two input quirks handled here:
 - oxo-flow config lists interpolate as one comma-joined string, so --samples
   entries are split on commas before pairing with --metrics paths.
@@ -41,6 +47,26 @@ KEY_ALIASES = {
     "cdna_valid_barcodes": "valid_barcodes_pct",
     "species": "species",
     "total_reads": "total_reads",
+    # N13 (audit 20261104): ambient/doublet. dnbc4tools 3.0's
+    # metrics_summary.xls carries NEITHER field — if a future version starts
+    # emitting one, these aliases promote it to a real measurement instead of
+    # letting it fall into the raw_* catch-all. Absent values stay an explicit
+    # not_assessed marker (see NOT_ASSESSED_DEFAULTS) so downstream tables
+    # never present a blank as if it were a measurement of zero.
+    "doublet_pct": "doublet_pct",
+    "doublet_rate": "doublet_pct",
+    "doublet_fraction": "doublet_pct",
+    "predicted_doublets": "doublet_pct",
+    "doublet_score": "doublet_score",
+    "ambient_pct": "ambient_pct",
+    "ambient_rate": "ambient_pct",
+    "ambient_fraction": "ambient_pct",
+    "ambient_rna_fraction": "ambient_pct",
+}
+
+NOT_ASSESSED_DEFAULTS = {
+    "doublet_pct": "not_assessed(tool_lacks)",
+    "ambient_pct": "not_assessed(tool_lacks)",
 }
 
 # "7,390" / "1,234.5" / "83.76%" — commas used purely as thousands separators
@@ -108,6 +134,14 @@ def main() -> int:
                 if norm not in seen:
                     seen.add(norm)
                     all_keys.append(norm)
+        # N13: ambient/doublet are not assessed by dnbc4tools 3.0 — emit the
+        # explicit marker unless the tool actually provided a value above.
+        for col, marker in NOT_ASSESSED_DEFAULTS.items():
+            if not row.get(col):
+                row[col] = marker
+                if col not in seen:
+                    seen.add(col)
+                    all_keys.append(col)
         rows.append(row)
 
     with open(args.output, "w", newline="") as out:
@@ -115,6 +149,9 @@ def main() -> int:
         w.writeheader()
         w.writerows(rows)
     print(f"[scrna_metrics] {len(rows)} samples, {len(all_keys)} metrics -> {args.output}", file=sys.stderr)
+    print("[scrna_metrics] ambient/doublet: dnbc4tools 3.0 lacks these fields; "
+          "reported as not_assessed (P2: scDblFinder/DecontX on protected "
+          "raw_matrix/)", file=sys.stderr)
     return 0
 
 

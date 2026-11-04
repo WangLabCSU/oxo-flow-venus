@@ -63,6 +63,15 @@ read_group_platform = "BGI"
 star_index = "/home/data/reference/star_index_GRCh38_d1vd1"
 gencode_gtf = "/home/data/reference/gencode_v47/gencode.v47.primary_assembly.annotation.gtf"
 
+# featureCounts strandedness (-s): 0 = unstranded (current default, verified
+# empirically for this library type — see README "Library strandedness");
+# 1 = sense/forward, 2 = antisense/reverse. Changing this value re-runs
+# featureCounts on the next run (config-referencing rules are invalidated) and
+# invalidates every downstream consumer of the count matrix (merge_counts,
+# neoantigen expression filter). Verify before flipping: a stranded library
+# counted with the wrong -s silently halves/zeroes counts.
+featurecounts_strandedness = "0"
+
 # Variant-calling resources (GATK resource bundle, hg38)
 dbsnp = "/home/data/reference/gatk-resources/hg38/Homo_sapiens_assembly38.dbsnp138.vcf.gz"
 mills = "/home/data/reference/gatk-resources/hg38/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz"

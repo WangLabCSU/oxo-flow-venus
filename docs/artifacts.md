@@ -84,6 +84,11 @@ chr-scattered pattern.
 | `fastp` | `qc/trim/{sample}.fastp.json` / `.html` | A | inputs to protected MultiQC |
 | `fastqc` ×30 | `qc/fastqc/{sample}_R{1,2}.trim_fastqc.html` | A | inputs to protected MultiQC |
 | `multiqc` ×1 | `qc/multiqc/multiqc_report.html`, `.../multiqc_general_stats.txt` | A | cohort QC report |
+| `wgs_flagstat` ×20 | `qc/alignqc/{sample}.flagstat` | **A** | mapping rate / duplicates (20261104 N10); MultiQC input |
+| `wgs_bamstats` ×20 | `qc/alignqc/{sample}.stats` | **A** | insert-size distribution / GC (N10); MultiQC input |
+| `wgs_mosdepth` ×20 | `qc/alignqc/{sample}.mosdepth.summary.txt` + `.mosdepth.thresholds.bed.gz` | **A** | depth + ≥10x/20x fractions + sex-check input (N10/N11); 1Mb windows — no whole-genome per-base file |
+| `wgs_mosdepth` | `qc/alignqc/{sample}.mosdepth.regions.bed.gz` (+ side products `*.mosdepth.global.dist.txt`, `*.mosdepth.region.dist.txt`) | C | per-window means + depth histograms; regenerable in minutes |
+| `wgs_alignqc_summary` ×1 | `qc/alignqc/wgs_alignqc_summary.tsv` | **A** | one row per DNA sample; feeds MultiQC anchors, cohort_summary, clinical report |
 
 ### Alignment (`rules/align.oxoflow`) — DNA
 
@@ -159,10 +164,12 @@ chr-scattered pattern.
 | Rule (×n) | Output | Class | Notes |
 |---|---|---|---|
 | `star_align` ×10 | `rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam` | **A** | archive-grade RNA BAM (~31 GB cohort-wide): junction discovery / IGV / re-counting without re-alignment |
-| `star_align` | `rna/star/{sample}/{sample}.Log.final.out` + `.ReadsPerGene.out.tab` | **A** | QC products |
-| `featurecounts` ×10 | `rna/counts/{sample}.featurecounts.txt` + `.summary` | **A** | |
+| `star_align` | `rna/star/{sample}/{sample}.Log.final.out` + `.ReadsPerGene.out.tab` + `.Chimeric.out.junction` | **A** | QC products; the junction file feeds `rna_fusion_screen` (20261104 N12) |
+| `featurecounts` ×10 | `rna/counts/{sample}.featurecounts.txt` + `.summary` | **A** | strand mode via `config.featurecounts_strandedness` (N14, default 0 = unstranded) |
 | `merge_counts` ×1 | `rna/counts/cohort.gene_counts.txt` | **A** | cohort matrix |
 | `rna_qc_summary` ×1 | `rna/qc/rna_qc_summary.tsv` | **A** | |
+| `rna_fusion_screen` ×10 | `rna/fusion/{sample}.fusion_candidates.tsv` | **A** | screening-level split-read candidates (N12); every row carries the orthogonal-confirmation disclosure |
+| `rna_fusion_cohort` ×1 | `report/fusion_screen_cohort.tsv` | **A** | panel hits first; clinical report section |
 
 ### Single-cell RNA (`rules/scrna.oxoflow`)
 

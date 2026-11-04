@@ -19,3 +19,6 @@ scripts/__pycache__/
 # scripts/bootstrap_envs.sh; never commit or pip-install into these.
 envs/*/.pixi/
 /.pixi/
+
+__pycache__/
+*.pyc

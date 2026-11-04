@@ -4,6 +4,8 @@
 Inputs arrive as ONE list (--inputs) mixing module tables; each file is
 routed by its basename so argument order does not matter:
   rna_qc_summary.tsv  - STAR bulk-RNA QC
+  wgs_alignqc_summary.tsv - per-sample WGS alignment QC (flagstat/stats/
+                        mosdepth + sex check, N10/N11)
   scrna_metrics.tsv   - single-cell metrics
   cohort_ascat.tsv    - ASCAT purity/ploidy cohort table
   cohort_ecdna.tsv    - ecDNA counts cohort table
@@ -34,6 +36,8 @@ def route(path: str) -> str:
     name = Path(path).name
     if name == "rna_qc_summary.tsv":
         return "rna"
+    if name == "wgs_alignqc_summary.tsv":
+        return "wgs"
     if name == "scrna_metrics.tsv":
         return "sc"
     if name == "cohort_ascat.tsv":
@@ -63,7 +67,10 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     args = ap.parse_args()
 
-    groups: dict[str, list[str]] = {"rna": [], "sc": [], "ascat": [], "ecdna": [], "msi": [], "tmb": []}
+    groups: dict[str, list[str]] = {
+        "rna": [], "wgs": [], "sc": [], "ascat": [], "ecdna": [],
+        "msi": [], "tmb": [],
+    }
     for path in args.inputs:
         groups[route(path)].append(path)
     if not groups["rna"] or not groups["sc"]:
@@ -85,6 +92,8 @@ def main() -> int:
         ("sc_", read_tsv(groups["sc"][0])),
         ("tmb_", [row for path in groups["tmb"] for row in read_tsv(path)]),
     ]
+    if groups["wgs"]:
+        sources.append(("wgs_", read_tsv(groups["wgs"][0])))
     if groups["ascat"]:
         sources.append(("ascat_", read_tsv(groups["ascat"][0])))
     if groups["ecdna"]:
