@@ -19,6 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 
+import collect_neoantigen  # noqa: E402
 import hla_parse  # noqa: E402
 import neoantigen_report as nr  # noqa: E402
 import pvac_alleles  # noqa: E402
@@ -235,3 +236,60 @@ class NeoantigenReport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class CollectNeoantigenTest(unittest.TestCase):
+    """venus#34: per-sample neoantigen summaries -> one wide cohort table."""
+
+    SUMMARY_A = (
+        "class\tmetric\tvalue\tdetail\n"
+        "neoantigen\thla_alleles_typed\t13\tHLA-A*02:07;HLA-A*11:01\n"
+        "neoantigen\thla_alleles_predictor_usable\t6\t\n"
+        "neoantigen\tpredictors\tMHCflurry\tMHC-II predictions not run in P0\n"
+        "neoantigen\tcandidates_reported\t263\t\n"
+        "neoantigen\tunique_candidates\t261\t\n"
+        "neoantigen\tburden_strong_500nM\t231\t\n"
+        "neoantigen\tburden_highaff_100nM\t139\t\n"
+        "neoantigen\tframeshift_neoantigens\t0\tframeshift-derived among strong binders\n"
+        "neoantigen\texpr_tpm_pass\t138\t\n")
+
+    SUMMARY_B = (
+        "class\tmetric\tvalue\tdetail\n"
+        "neoantigen\thla_alleles_typed\t14\t\n"
+        "neoantigen\thla_alleles_predictor_usable\t6\t\n"
+        "neoantigen\tpredictors\tMHCflurry\tMHC-II predictions not run in P0\n"
+        "neoantigen\tunique_candidates\t262\t\n"
+        "neoantigen\tburden_strong_500nM\t232\t\n"
+        "neoantigen\tburden_highaff_100nM\t161\t\n"
+        "neoantigen\tframeshift_neoantigens\t0\t\n"
+        "neoantigen\texpr_tpm_pass\t125\t\n")
+
+    def test_wide_pivot_and_honest_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            a = os.path.join(td, "GC01.summary.tsv")
+            b = os.path.join(td, "GC02.summary.tsv")
+            with open(a, "w") as fh:
+                fh.write(self.SUMMARY_A)
+            with open(b, "w") as fh:
+                fh.write(self.SUMMARY_B)
+            out = os.path.join(td, "cohort.tsv")
+            sys.argv = ["collect_neoantigen.py", "--inputs", a, b,
+                        "--output", out]
+            self.assertEqual(collect_neoantigen.main(), 0)
+            with open(out) as fh:
+                lines = fh.read().splitlines()
+            header = lines[0].split("\t")
+            self.assertEqual(header[0], "sample")
+            self.assertIn("predictors_note", header)
+            by_a = dict(zip(header, lines[1].split("\t")))
+            by_b = dict(zip(header, lines[2].split("\t")))
+            self.assertEqual(by_a["sample"], "GC01")
+            self.assertEqual(by_a["burden_strong_500nM"], "231")
+            self.assertEqual(by_a["expr_tpm_pass"], "138")
+            self.assertEqual(by_a["predictors"], "MHCflurry")
+            self.assertIn("MHC-II", by_a["predictors_note"])
+            # honest missing: candidates_reported absent in B -> empty cell
+            self.assertEqual(by_b["candidates_reported"], "")
+            self.assertEqual(by_b["burden_highaff_100nM"], "161")
+            # deterministic sample order (sorted by input path)
+            self.assertEqual([by_a["sample"], by_b["sample"]], ["GC01", "GC02"])

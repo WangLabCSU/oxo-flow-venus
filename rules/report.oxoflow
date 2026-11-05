@@ -24,6 +24,7 @@ input = [
     "report/cohort_summary.tsv",
     "report/clinical_cohort.tsv",
     "report/clinical_therapies_cohort.tsv",
+    "report/neoantigen_cohort.tsv",
 ]
 output = ["report/methods_section.md"]
 # Keep: report module outputs are the clinical deliverables.
@@ -234,6 +235,46 @@ python {config.venus_tools}/cohort_tables.py \
 # clinical_report.py); cohort-specific narrative comes from
 # notes/interpretation.md (a tracked source file, not a rule product).
 [[rules]]
+name = "neoantigen_cohort"
+description = "Collect per-sample neoantigen burden metrics into a cohort table"
+expand_inputs = [
+    { pattern = "neoantigen/{pair_id}.summary.tsv", variables = { pair_id = "config.pairs_list" } },
+]
+output = ["report/neoantigen_cohort.tsv"]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = ["report/neoantigen_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+when = "config.tumor_only == 'true'"
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/collect_neoantigen.py \
+    --inputs {input} \
+    --output {output[0]} \
+    2> logs/neoantigen_cohort.log
+"""
+
+[[rules]]
+name = "neoantigen_cohort_paired"
+description = "Write header-only neoantigen cohort table (paired cohort: no summaries)"
+input = []
+output = ["report/neoantigen_cohort.tsv"]
+# Keep: same shared output path as neoantigen_cohort — report-facing.
+protected_output = ["report/neoantigen_cohort.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+when = "config.tumor_only != 'true'"
+shell = """
+mkdir -p report logs && \
+printf 'sample\thla_alleles_typed\thla_alleles_predictor_usable\tunique_candidates\tburden_strong_500nM\tburden_highaff_100nM\texpr_tpm_pass\tframeshift_neoantigens\tpredictors\tpredictors_note\n' \
+    > report/neoantigen_cohort.tsv && \
+printf '[neoantigen_cohort_paired] paired cohort: neoantigen module is tumor-only-gated (venus#31)\n' \
+    > logs/neoantigen_cohort.log
+"""
+
+[[rules]]
 name = "clinical_report"
 description = "Render final cohort report (Markdown + HTML)"
 input = [
@@ -277,6 +318,7 @@ python {config.venus_tools}/clinical_report.py \
     --msi {input[9]} \
     --clinical {input[10]} \
     --clinical-therapies {input[11]} \
+    --neoantigen-cohort {input[12]} \
     --pairs config/pairs.tsv \
     --output-md {output[0]} \
     --output-html {output[1]} \
