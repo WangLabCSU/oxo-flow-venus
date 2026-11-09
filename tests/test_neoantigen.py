@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 import collect_neoantigen  # noqa: E402
 import hla_parse  # noqa: E402
 import manta_to_arriba as mta  # noqa: E402
+import msi_frameshift_join as mfj  # noqa: E402
 import neoantigen_report as nr  # noqa: E402
 import pvac_alleles  # noqa: E402
 import tcr_report  # noqa: E402
@@ -859,6 +860,126 @@ class ScrnaCorroborationTest(unittest.TestCase):
             # md: caveat bullet + extended top-N table
             self.assertIn("over ALL filtered cells", md)
             self.assertIn("no malignant-cell annotation", md)
+
+
+class MsiFrameshiftJoinTest(unittest.TestCase):
+    """venus#31 P1 item 7: frameshift_neoantigens x MSI status cohort page.
+
+    Covers the three honesty-critical shapes of the join:
+      both sides present (MSI-H first, frameshift share computed),
+      tumor-only MSI (header-only msi_cohort -> every MSI cell
+      "not_available", never a silent blank), and paired-only neoantigen
+      (header-only neoantigen_cohort -> frameshift cells not_available).
+    """
+
+    NEO = ("sample\thla_alleles_typed\thla_alleles_predictor_usable\t"
+           "candidates_reported\tunique_candidates\tburden_strong_500nM\t"
+           "burden_highaff_100nM\texpr_tpm_pass\tframeshift_neoantigens\t"
+           "predictors\tpredictors_note\n"
+           "GC01\t13\t6\t263\t261\t20\t139\t138\t2\tMHCflurry\tnote\n"
+           "GC02\t14\t6\t200\t200\t10\t100\t125\t0\tMHCflurry\tnote\n")
+    MSI = ("sample\traw_total_sites\tsummary_total_sites\treported_unstable\t"
+           "reported_pct\tbh_unstable\tbh_pct\tunstable_delta\t"
+           "uint16_saturated\tmsi_status_wgs\tmsi_status_wes\n"
+           "GC01\t5000\t5000\t3\t0.06\t4\t0.08\t1\tfalse\tMSI-H\tMSS\n")
+    MSI_HEADER_ONLY = (
+        "sample\traw_total_sites\tsummary_total_sites\treported_unstable\t"
+        "reported_pct\tbh_unstable\tbh_pct\tunstable_delta\t"
+        "uint16_saturated\tmsi_status_wgs\tmsi_status_wes\n")
+
+    def run_join(self, tmp, neo_text, msi_text, extra=()):
+        neo = os.path.join(tmp, "neo.tsv")
+        msi = os.path.join(tmp, "msi.tsv")
+        tsv = os.path.join(tmp, "joined.tsv")
+        md = os.path.join(tmp, "joined.md")
+        write_tsv(neo, neo_text)
+        write_tsv(msi, msi_text)
+        rc = mfj.main_with_args(
+            ["--neoantigen-cohort", neo, "--msi-cohort", msi,
+             "--strong-nm", "500", "--out-tsv", tsv, "--out-md", md,
+             *extra])
+        assert rc == 0
+        with open(tsv) as fh:
+            rows = list(csv.DictReader(fh, delimiter="\t"))
+        with open(md) as fh:
+            md_text = fh.read()
+        return rows, md_text
+
+    def test_join_msih_first_and_frameshift_share(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(tmp, self.NEO, self.MSI)
+            self.assertEqual([r["sample"] for r in rows], ["GC01", "GC02"])
+            gc01 = rows[0]
+            self.assertEqual(gc01["frameshift_neoantigens"], "2")
+            self.assertEqual(gc01["msi_status_wgs"], "MSI-H")
+            self.assertEqual(gc01["msi_status_wes"], "MSS")
+            self.assertEqual(gc01["msi_bh_pct"], "0.08")
+            # frameshift share of strong binders: 2/20 = 10.0%
+            self.assertEqual(gc01["frameshift_pct_of_strong"], "10.0")
+            gc02 = rows[1]
+            self.assertEqual(gc02["frameshift_neoantigens"], "0")
+            self.assertEqual(gc02["msi_status_wgs"], "not_available")
+            self.assertEqual(gc02["frameshift_pct_of_strong"], "0.0")
+            self.assertIn("msi_not_available", gc02["note"])
+            # md states cutoffs and the sentinel
+            self.assertIn("3.5%", md)
+            self.assertIn("15%", md)
+            self.assertIn("not_available", md)
+            self.assertIn("1 sample(s) have both sides joined", md)
+
+    def test_tumor_only_msi_header_only_honest_na(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(tmp, self.NEO, self.MSI_HEADER_ONLY)
+            self.assertEqual(len(rows), 2)
+            for r in rows:
+                self.assertEqual(r["msi_status_wgs"], "not_available")
+                self.assertEqual(r["msi_status_wes"], "not_available")
+                self.assertEqual(r["msi_bh_pct"], "not_available")
+                self.assertIn("msi_not_available", r["note"])
+            self.assertIn("header-only", md)
+            self.assertIn("matched normal", md)
+            self.assertIn("frameshift_neoantigens", md)
+
+    def test_paired_neo_header_only_honest_na(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp,
+                "sample\thla_alleles_typed\tframeshift_neoantigens\n",
+                self.MSI)
+            self.assertEqual(rows[0]["sample"], "GC01")
+            self.assertEqual(rows[0]["frameshift_neoantigens"],
+                             "not_available")
+            self.assertEqual(rows[0]["msi_status_wgs"], "MSI-H")
+            self.assertEqual(rows[0]["frameshift_pct_of_strong"],
+                             "not_available")
+            self.assertIn("frameshift_not_available", rows[0]["note"])
+
+    def test_sample_only_on_one_side(self):
+        msi = self.MSI.replace("GC01", "GC09")
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, _ = self.run_join(tmp, self.NEO, msi)
+            # the unmatched MSI sample keeps its row (honest presence);
+            # sort order: MSI-H rows first, then by sample id
+            self.assertEqual([r["sample"] for r in rows],
+                             ["GC09", "GC01", "GC02"])
+            gc09 = rows[0]
+            self.assertEqual(gc09["frameshift_neoantigens"],
+                             "not_available")
+            self.assertEqual(gc09["frameshift_pct_of_strong"],
+                             "not_available")
+            self.assertIn("frameshift_not_available", gc09["note"])
+            gc01 = rows[1]
+            self.assertEqual(gc01["msi_status_wgs"], "not_available")
+            self.assertIn("msi_not_available", gc01["note"])
+
+    def test_empty_inputs_render_honest_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp,
+                "sample\tframeshift_neoantigens\n",
+                "sample\tmsi_status_wgs\tmsi_status_wes\tbh_pct\n")
+            self.assertEqual(rows, [])
+            self.assertIn("no rows", md)
 
 
 if __name__ == "__main__":

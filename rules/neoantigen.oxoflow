@@ -385,3 +385,48 @@ python {config.venus_tools}/neoantigen_report.py \
     --out-md {output[2]} \
     2> {log}
 """
+
+# ------------------------------------------------- MSI-H x frameshift page ---
+# venus#31 P1 item 7: join the cohort-wide frameshift_neoantigens counts
+# (report/neoantigen_cohort.tsv, from collect_neoantigen.py) with the MSI
+# statuses (report/msi_cohort.tsv, from collect_msi.py: msi_status_wgs at
+# the 3.5% Niu 2014 WGS cutoff, msi_status_wes at the 15% WES convention)
+# into report/msi_frameshift_cohort.{tsv,md}.
+#
+# Why the neoantigen module owns this page: the join crosses module
+# deliverables, and the honest reading depends on cohort mode. In a
+# tumor-only cohort the MSI table is the header-only companion (MSI needs a
+# matched normal), so every MSI cell renders the explicit sentinel
+# "not_available" -- never a silent blank; in a paired cohort the neoantigen
+# side is the header-only one (the neoantigen module is tumor-only-gated,
+# venus#31). Both shapes are disclosed in the markdown page.
+#
+# Environment: envs/report (stdlib-only script) - same env as the report
+# module's collectors; no new env, no new lock gap.
+[[rules]]
+name = "msi_frameshift_page"
+description = "Cohort MSI-H x frameshift-neoantigen join table + markdown page"
+when = "config.tumor_only == 'true'"
+input = [
+    "report/neoantigen_cohort.tsv",
+    "report/msi_cohort.tsv",
+    "{config.venus_tools}/msi_frameshift_join.py",
+]
+output = [
+    "report/msi_frameshift_cohort.tsv",
+    "report/msi_frameshift_cohort.md",
+]
+log = "logs/msi_frameshift_page.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/msi_frameshift_join.py \
+    --neoantigen-cohort {input[0]} \
+    --msi-cohort {input[1]} \
+    --strong-nm {config.neo_binding_nm} \
+    --out-tsv {output[0]} \
+    --out-md {output[1]} \
+    2> {log}
+"""
