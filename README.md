@@ -367,6 +367,7 @@ the whole somatic chain without a producer (see `venus.oxoflow`).
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
 - `qc/alignqc/wgs_alignqc_summary.tsv` — per-sample WGS mapping rate, duplicate rate, depth, ≥10x/20x fractions, insert-size median, sex check (screening-level; contamination explicitly not_assessed)
 - `report/fusion_screen_cohort.tsv` — RNA fusion screening candidates (panel hits first; screening-level, needs orthogonal confirmation)
+- `report/msi_frameshift_cohort.{tsv,md}` — MSI-H × frameshift-neoantigen cohort page; missing sides render the explicit `not_available` sentinel (tumor-only cohorts carry header-only MSI; see `docs/method-rationale.md`)
 
 ## License
 

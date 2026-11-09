@@ -335,6 +335,78 @@ aggregations fan out over `config.pairs_list` and still reference the
 tumor-only pairs' unproducible inputs; engine support for a paired-only
 pair list is tracked separately.
 
+### Neoantigen module (P1): pVACfuse, TCR/HLA-RNA QC, HLA-LOH, MSI-H x frameshift
+
+The P1 items (venus#31) extend the P0 chain (SpecHLA typing → VEP plugin
+re-annotation → pVACseq/MHCflurry → burden report) with four opt-in layers
+and one cohort page. Tool choices were verified against actual packages
+(bioconda/PyPI/wheel inspection, not memory):
+
+- **Fusion neoantigens (pVACfuse).** Manta's BND records are not in
+  pVACfuse's input format; `scripts/manta_to_arriba.py` converts them to the
+  Arriba TSV schema pVACfuse consumes (5'/3' transcript models, junction
+  sequences fetched from the reference FASTA, PR/SR support). Paired cohorts
+  feed the PASS-scored `deliver/{pair_id}.sv.vcf.gz`; tumor-only cohorts
+  feed the candidateSV file (explicitly UNSCORED Manta calls) and the output
+  filename says so (`fuse.candidate.filtered.tsv`). pVACfuse ships in the
+  same pvactools env as pVACseq — no new env.
+- **TCR repertoire (TRUST4).** TRUST4 (bioconda `trust4`, MIT) assembles
+  TCRβ clonotypes from the bulk-RNA BAM. Opt-in (`run_tcr`): most venus
+  cohorts are tumor-only organoids where bulk-RNA TCR adds little, and
+  sensitivity is depth-dependent. Reference bring-up (bcrtcr.fa +
+  human_IMGT+C.fa) is an ops step via `scripts/prepare_trust4_ref.sh`.
+- **RNA-side HLA cross-check (arcasHLA).** arcasHLA (bioconda `arcashla`,
+  GPL-3.0; repo now under RabadanLab) types HLA from the bulk-RNA BAM and
+  `hla_dna_rna_qc` compares per-gene against the SpecHLA DNA typing
+  (match / mismatch / absent_rna / absent_dna / not_run, order-insensitive
+  2-field normalization). Opt-in (`run_hla_rna`); arcasHLA builds its `dat/`
+  reference inside the env prefix, so `scripts/prepare_arcas_ref.sh` runs
+  once per machine after the pixi install.
+- **HLA-LOH — DASH infeasibility and the SpecHLA substitute.** DASH (Shukla
+  et al. 2015) is the publication-standard HLA-LOH caller but has **no
+  bioconda or PyPI package** (checked 2026-11; it is a standalone Perl/
+  R code drop), so it cannot satisfy the pipeline's pixi lock-only env
+  policy. The honest in-lock substitute is `spechla-loh`
+  (SpecHLA 1.0.12's built-in `cal.hla.copy.pl`, shipped inside the existing
+  envs/hla): per-allele copy ratios + LOH calls with a heterozygous-SNP
+  floor (`-C`, default 5), purity/ploidy REQUIRED and fed from the ASCAT
+  fit (which itself needs a matched normal — hence paired-cohort only and
+  opt-in via `run_hla_loh`). Consequence: HLA-LOH calls here are copy-ratio
+  inferences under ASCAT's purity/ploidy uncertainty, not DASH's
+  germline-heterozygosity model; this disclosure travels with the rule
+  (rules/hla_qc.oxoflow) and the artifacts doc.
+- **scRNA corroboration.** %positive of each candidate gene in the pair's
+  own filter_feature.h5ad, reusing envs/scrna (the only env with h5py —
+  no new env, no new lock gap). Honest caveat (embedded in the report):
+  the dnbc4tools h5ad carries no malignant-cell annotation, so %positive
+  is over ALL filtered cells — a coarse "is the gene expressed at all"
+  signal, never tumor-cell prevalence.
+- **MSI-H x frameshift cohort page.** `msi_frameshift_page` joins the
+  cohort-wide `frameshift_neoantigens` counts (frameshift-derived among
+  strong binders, from `report/neoantigen_cohort.tsv`) with the MSI
+  statuses from `report/msi_cohort.tsv` — `msi_status_wgs` at the 3.5%
+  BH-corrected unstable-site cutoff (Niu et al. 2014) and
+  `msi_status_wes` at the 15% WES/panel convention, shown side by side
+  and never collapsed. Because the two sides live in opposite cohort
+  modes (MSI is paired-only, the neoantigen module is tumor-only-gated),
+  every joined cell is either a value or the explicit sentinel
+  `not_available` — in a tumor-only cohort all MSI cells are honestly
+  not-available (header-only companion table), and the markdown page
+  states which side carries data instead of implying a join that never
+  happened. A frameshift count is a lower bound: it covers only
+  candidates that passed pVACseq binding prediction.
+
+**Why.** Each addition is either license-clean in-lock (MHCflurry, TRUST4,
+arcasHLA, SpecHLA tools) or explicitly disclosed as operator-side
+(pVACview's R Shiny stack); the MSI-H x frameshift join makes the
+MSI-H → frameshift-indel neoantigen expectation explicit instead of
+requiring a manual cross-table read.
+
+**Limitations.** The neoantigen module is tumor-only-gated (P0 scope), so
+the frameshift x MSI join has both sides populated only if a future
+paired-cohort extension lifts that gate; until then one side of every row
+is `not_available` by construction.
+
 ---
 
 ## Reference list
@@ -348,16 +420,32 @@ pair list is tracked separately.
 - DePristo et al. 2011, *Genome Res* 21:436 — GATK/BQSR.
 - Dobin et al. 2013, *Genome Biol* 14:R95 — STAR.
 - Ewels et al. 2016, *Bioinformatics* 32:3671 — MultiQC.
+- Hurt et al. 2019, *Genome Med* 11:78 — pVACtools (pVACseq/pVACfuse
+  prediction and the pVACview review app).
 - Liao et al. 2014, *Bioinformatics* 30:923 — featureCounts.
 - Mayakonda et al. 2018, *Leukemia* 32:1152 — vcf2maf.
 - McKenna et al. 2010, *Genome Res* 20:1297 — GATK.
 - McLaren et al. 2016, *Genome Biol* 17:122 — VEP.
-- Niu et al. 2014, *Bioinformatics* 30:1017 — MSIsensor.
+- Niu et al. 2014, *Bioinformatics* 30:1017 — MSIsensor; *Sci Rep*
+  4:4731 (erratum/addendum) — the 3.5% WGS MSI-H cutoff used by
+  collect_msi.py (the 15% WES/panel convention is carried alongside).
 - Poplin et al. 2018, *Nat Biotechnol* 36:875 — Mutect2/DeepVariant-grade
   filtering.
 - Raine et al. 2023, *NAR Genom Bioinform* 5:lqad041 — ASCAT NGS chain +
   alleleCounter.
+- Shukla et al. 2015, *Genome Med* 7:63 — DASH (HLA-LOH). NOT deployed:
+  no bioconda/PyPI package exists (checked 2026-11), so the pixi
+  lock-only env policy excludes it; spechla-loh substitutes (see the
+  neoantigen section above).
+- SpecHLA — Luo et al. 2024, *Nat Biotechnol* 42:1318 (SpecHLA HLA typing
+  and the built-in cal.hla.copy.pl LOH step).
 - Talevich et al. 2016, *PLoS Comput Biol* 12:e1004873 — CNVkit.
+- TRUST4 — Song et al. 2021, *Nat Commun* 12:5710 — TCR/BCR assembly from
+  RNA-seq.
+- arcasHLA — O'Donnell et al. 2020, *Bioinformatics* 36:4192 — RNA-side
+  HLA typing for the DNA/RNA cross-check.
 - Van Loo et al. 2010, *PNAS* 108:12313 — ASCAT.
 - Vasimuddin et al. 2019, *IEEE ACS* — BWA-MEM2.
 - Wang et al. 2024, *Nat Commun* 15:3231 — gcap ASCAT-NGS orchestration.
+- Wells et al. 2020, *Immunity* 53:932 — TESLA consortium best practices
+  for neoantigen prediction pipelines (binding-threshold strategy).
