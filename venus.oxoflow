@@ -193,6 +193,16 @@ run_tcr = "false"
 trust_bcrtcr_fa = "/home/data/reference/trust4/bcrtcr.fa"
 trust_imgt_fa = "/home/data/reference/trust4/human_IMGT+C.fa"
 
+# RNA-side HLA typing (venus#31 P1 item 3, hla_dna_rna_qc): arcasHLA from the
+# bulk-RNA BAM, cross-checked against the SpecHLA DNA typing per gene
+# (hla_qc/{pair_id}.consistency.tsv). "false" (default) = not a hard
+# dependency — same rationale as run_tcr: opt-in bulk-RNA module whose
+# reference bring-up is a per-machine ops step (arcasHLA builds dat/ INSIDE
+# its env prefix; run scripts/prepare_arcas_ref.sh once after pixi install of
+# envs/arcas). "true" instantiates hla_rna/{sample}/... per bulk-RNA sample
+# and hla_qc/{pair_id}.consistency.tsv per WGS pair.
+run_hla_rna = "false"
+
 # Pipeline helpers
 venus_tools = "scripts"
 
@@ -289,6 +299,9 @@ path = "rules/clinical.oxoflow"
 
 [[include]]
 path = "rules/neoantigen.oxoflow"
+
+[[include]]
+path = "rules/hla_qc.oxoflow"
 
 [[include]]
 path = "rules/report.oxoflow"

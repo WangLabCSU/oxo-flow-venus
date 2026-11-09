@@ -1,0 +1,112 @@
+[workflow]
+name = "venus-hla-qc"
+description = "RNA-side HLA typing (arcasHLA) and SpecHLA-vs-arcasHLA typing consistency QC (venus#31 P1 item 3)"
+
+# ---------------------------------------------------------------- context ---
+# DNA-side HLA typing is rules/neoantigen.oxoflow:hla_type_dna (SpecHLA,
+# envs/hla). This module adds the RNA side (arcasHLA, envs/arcas) and joins
+# the two into a per-gene consistency table. Both typing layers are OPTIONAL:
+#   - hla_type_rna is gated by config.run_hla_rna (mirrors the run_tcr gate of
+#     tcr_from_rna — an opt-in bulk-RNA module, off by default);
+#   - hla_dna_rna_qc only fires for pairs that have BOTH layers: it consumes
+#     hla/{experiment}.alleles.tsv (always produced by hla_type_dna on WGS
+#     pairs) and hla_rna/{pair_id}-TR/... (only produced when run_hla_rna is
+#     on), so the join rule is expand_inputs-gated and simply not scheduled
+#     otherwise. No complementary header-only rule is needed because nothing
+#     downstream consumes this QC table (it is a terminal artifact).
+#
+# RNA sample naming: "{pair_id}-TR" is the cohort convention (same one
+# neoantigen_report documents); cohorts deviating from it should extend the
+# hla_type_rna wildcard mapping, not edit this file.
+#
+# Tool choice (why arcasHLA): optiType/HLA*LA have no maintained conda
+# packaging and would need containerized/pinned builds outside the pixi
+# lock-only policy; arcasHLA 0.6.0 is on bioconda, was verified
+# package-by-package (deps, dispatcher, dat/ layout, genotype.json schema —
+# see envs/arcas/pixi.toml header), and emits 3-field alleles that normalize
+# cleanly to the 2-field comparison hla_parse.py already uses for DNA.
+
+# ------------------------------------------------------------ RNA typing ---
+# arcasHLA two-step (extract then genotype) on the STAR BAM:
+#   1. `arcasHLA extract` pulls HLA + decoy reads out of the BAM (it runs
+#      samtools index itself when .bai is missing — verified in extract.py —
+#      so rna/star's .bam-without-declared-.bai is safe), writing
+#      {sample}.extracted.{1,2}.fq.gz under the fresh workdir.
+#   2. `arcasHLA genotype` types classical HLA-I/II genes from the extracted
+#      FASTQs against the env-prefix dat/ reference (bring-up:
+#      scripts/prepare_arcas_ref.sh, one-time per machine) and writes
+#      {sample}.genotype.json. Loci under min_count 75 are silently omitted
+#      from the JSON; hla_consistency.py renders that honestly as absent_rna.
+# -g all: all classical genes (default, explicit here); --min_count left at
+# arcasHLA's 75 default.
+[[rules]]
+name = "hla_type_rna"
+description = "arcasHLA HLA typing from bulk RNA (extract + genotype)"
+input = [
+    "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
+    "{config.venus_tools}/hla_consistency.py",
+]
+output = [
+    "hla_rna/{sample}/{sample}.genotype.json",
+    "hla_rna/{sample}/logs/extract.log",
+    "hla_rna/{sample}/logs/genotype.log",
+]
+threads = 4
+memory = "16G"
+environment = { pixi = "envs/arcas/pixi.toml" }
+# Opt-in like tcr_from_rna's run_tcr: the arcas env + IMGT reference bring-up
+# (prepare_arcas_ref.sh) is a per-machine ops step, so the module must be
+# explicitly enabled (config.run_hla_rna, venus.oxoflow).
+when = "config.run_hla_rna == 'true' && wildcard.assay == 'rnaseq'"
+shell = """
+rm -rf hla_rna/{sample} && mkdir -p hla_rna/{sample}/logs && \
+arcasHLA extract \
+    --sample {sample} \
+    --outdir hla_rna/{sample} \
+    --threads {threads} \
+    {input[0]} \
+    2> hla_rna/{sample}/logs/extract.log && \
+arcasHLA genotype \
+    --sample {sample} \
+    -g all \
+    --outdir hla_rna/{sample} \
+    --threads {threads} \
+    hla_rna/{sample}/{sample}.extracted.1.fq.gz hla_rna/{sample}/{sample}.extracted.2.fq.gz \
+    2> hla_rna/{sample}/logs/genotype.log
+"""
+
+# --------------------------------------------------------- consistency QC ---
+# Join the DNA layer (SpecHLA, hla_type_dna product) with the RNA layer
+# (arcasHLA, above) per patient at 2-field resolution. Terminal QC artifact:
+# nothing downstream consumes it, so there is no paired/tumor-only
+# complementary twin. expand_inputs over config.pairs_list makes scheduling
+# self-gating: a pair without hla_rna output (run_hla_rna off, or RNA sample
+# absent) simply has no producible input pair and is skipped — hla_parse.py's
+# tumor-only caveat ("HLA-LOH and purity may distort calls") applies to the
+# DNA side of every row; hla_consistency.py's detail column carries the
+# one-sided-absence disclosure.
+[[rules]]
+name = "hla_dna_rna_qc"
+description = "Per-gene SpecHLA(DNA) vs arcasHLA(RNA) typing consistency table"
+input = [
+    "hla/{experiment}/hla.result.txt",
+    "hla/{experiment}.alleles.tsv",
+    "hla_rna/{pair_id}-TR/{pair_id}-TR.genotype.json",
+    "{config.venus_tools}/hla_consistency.py",
+]
+output = ["hla_qc/{pair_id}.consistency.tsv"]
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+when = "config.run_hla_rna == 'true'"
+shell = """
+mkdir -p hla_qc logs && \
+python {config.venus_tools}/hla_consistency.py \
+    --dna-tsv {input[1]} \
+    --dna-sample {experiment} \
+    --rna-json {input[2]} \
+    --rna-sample {pair_id}-TR \
+    --patient {pair_id} \
+    --out {output[0]} \
+    2> logs/hla_qc_{pair_id}.log
+"""

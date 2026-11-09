@@ -481,5 +481,96 @@ class MantaToArribaTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)  # header only
 
 
+class HlaConsistencyTest(unittest.TestCase):
+    """SpecHLA (DNA) vs arcasHLA (RNA) per-gene QC (venus#31 P1 item 3)."""
+
+    DNA_TSV = (
+        "sample\tgene\tallele_1\tallele_2\tallele_1_full\tallele_2_full\t"
+        "allele_1_g_group\tallele_2_g_group\ttyped\tspec_version\tmode\t"
+        "caveat\n"
+        "Pt01-TD\tA\tHLA-A*02:01\tHLA-A*29:02\t\t\t\t\tTRUE\t1.0.12\t"
+        "tumor_only\tcaveat\n"
+        "Pt01-TD\tB\tHLA-B*07:02\tHLA-B*44:03\t\t\t\t\tTRUE\t1.0.12\t"
+        "tumor_only\tcaveat\n"
+        "Pt01-TD\tC\tHLA-C*07:01\tHLA-C*01:02\t\t\t\t\tTRUE\t1.0.12\t"
+        "tumor_only\tcaveat\n")
+
+    def run_cli(self, rna_json_text, dna_text=None, dna_sample="Pt01-TD",
+                rna_sample="Pt01-TR", patient="Pt01"):
+        with tempfile.TemporaryDirectory() as tmp:
+            dna = os.path.join(tmp, "dna.tsv")
+            rna = os.path.join(tmp, "rna.json")
+            out = os.path.join(tmp, "out.tsv")
+            write_tsv(dna, dna_text or self.DNA_TSV)
+            write_tsv(rna, rna_json_text)
+            proc = subprocess.run(
+                [sys.executable, os.path.join(REPO, "scripts",
+                                              "hla_consistency.py"),
+                 "--dna-tsv", dna, "--dna-sample", dna_sample,
+                 "--rna-json", rna, "--rna-sample", rna_sample,
+                 "--patient", patient, "--out", out],
+                capture_output=True, text=True)
+            if proc.returncode != 0:
+                return proc.returncode, [], proc.stderr
+            with open(out) as fh:
+                return 0, list(csv.DictReader(fh, delimiter="\t")), proc.stderr
+
+    def test_match_mismatch_absent_not_run(self):
+        # A: match (order-insensitive, 3-field RNA normalizes to 2-field);
+        # B: arcasHLA omitted the locus (below min_count, absent from the
+        # JSON) -> absent_rna;
+        # C: arcasHLA called only one allele (half-call) -> mismatch;
+        # D-class genes: not typed anywhere -> not_run.
+        rna = ('{"A": ["HLA-A*29:02:01", "HLA-A*02:01:01"], '
+               '"C": ["HLA-C*07:01"]}')
+        rc, rows, err = self.run_cli(rna)
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(rows), 8)
+        by_gene = {r["gene"]: r for r in rows}
+        self.assertEqual(by_gene["A"]["concordance"], "match")
+        self.assertEqual(by_gene["A"]["rna_alleles"],
+                         "HLA-A*02:01;HLA-A*29:02")
+        self.assertEqual(by_gene["B"]["concordance"], "absent_rna")
+        self.assertIn("min_count", by_gene["B"]["detail"])
+        self.assertEqual(by_gene["C"]["concordance"], "mismatch")
+        self.assertEqual(by_gene["DRB1"]["concordance"], "not_run")
+        self.assertIn("1/2", err)
+
+    def test_absent_dna_when_spechla_skips_locus(self):
+        # SpecHLA leaves a locus untyped (tumor DNA gap / LOH) while arcas
+        # typed it -> absent_dna, with the RNA call carried in the row.
+        dna = (
+            "sample\tgene\tallele_1\tallele_2\tallele_1_full\tallele_2_full\t"
+            "allele_1_g_group\tallele_2_g_group\ttyped\tspec_version\tmode\t"
+            "caveat\n"
+            "Pt01-TD\tA\tHLA-A*02:01\tHLA-A*29:02\t\t\t\t\tTRUE\t1.0.12\t"
+            "tumor_only\tcaveat\n")
+        rna = ('{"A": ["HLA-A*02:01:01", "HLA-A*29:02:01"], '
+               '"B": ["HLA-B*07:02:01", "HLA-B*44:03:01"]}')
+        rc, rows, _ = self.run_cli(rna, dna_text=dna)
+        self.assertEqual(rc, 0)
+        by_gene = {r["gene"]: r for r in rows}
+        self.assertEqual(by_gene["A"]["concordance"], "match")
+        self.assertEqual(by_gene["B"]["concordance"], "absent_dna")
+        self.assertEqual(by_gene["B"]["rna_alleles"],
+                         "HLA-B*07:02;HLA-B*44:03")
+        self.assertEqual(by_gene["C"]["concordance"], "not_run")
+
+    def test_heterozygote_orientation_does_not_fake_mismatch(self):
+        # allele1/allele2 swap between layers must not be a mismatch.
+        rna = ('{"B": ["HLA-B*44:03:01:02", "HLA-B*07:02:01:01"], '
+               '"C": ["HLA-C*01:02:01", "HLA-C*07:01:01:01"]}')
+        rc, rows, _ = self.run_cli(rna)
+        self.assertEqual(rc, 0)
+        by_gene = {r["gene"]: r for r in rows}
+        self.assertEqual(by_gene["B"]["concordance"], "match")
+        self.assertEqual(by_gene["C"]["concordance"], "match")
+
+    def test_unreadable_rna_json_fails_loud(self):
+        rc, rows, err = self.run_cli('["not", "an", "object"]')
+        self.assertNotEqual(rc, 0)
+        self.assertIn("unreadable", err)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
