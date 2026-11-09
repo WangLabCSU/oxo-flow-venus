@@ -291,6 +291,17 @@ def msi_notes(rows: list[dict[str, str]]) -> str:
 # AmpliconArchitect -> AmpliconClassifier), GRCh38, --AA_solver clarabel.
 # The suite takes the tumor BAM only; its internal CNVkit step is tumor-only
 # against a prebuilt normal reference from the AA data repo.
+NEOANTIGEN_NOTE = (
+    "MHC-I neoantigen burden per sample (pVACseq + MHCflurry, tumor-only "
+    "mode). Strong binder: IC50 <= 500 nM; high-affinity: <= 100 nM. "
+    "Expression filter: source-gene bulk-RNA TPM >= 1. MHC-II "
+    "(NetMHCIIpan/MixMHC2pred) requires a separate DTU academic license "
+    "and is not run in P0 - see predictors_note per sample.")
+NEOANTIGEN_NOT_RUN = (
+    "_Neoantigen calling did not run for this cohort (requires tumor-only "
+    "WGS plus bulk RNA for the expression filter)._\n")
+
+
 ECDNA_METHODS = (
     "Focal amplification architecture was reconstructed with "
     "AmpliconSuite-pipeline (v1.6, CNVkit seed intervals -> AmpliconArchitect "
@@ -420,6 +431,8 @@ def main() -> int:
     ap.add_argument("--clinical", help="cohort clinical interpretation table")
     ap.add_argument("--clinical-therapies",
                     help="cohort therapy options table")
+    ap.add_argument("--neoantigen-cohort",
+                    help="cohort neoantigen burden table (pVACseq/MHCflurry)")
     ap.add_argument("--rna-qc")
     ap.add_argument("--alignqc",
                     help="WGS per-sample alignment QC table (N10/N11)")
@@ -471,6 +484,21 @@ def main() -> int:
         parts.append(tsv_markdown(
             args.ecdna, title="ecDNA counts per sample",
             only=["sample", "ecDNA_count"]))
+
+    if args.neoantigen_cohort:
+        parts.append("## Neoantigen burden (MHC-I, pVACseq + MHCflurry)\n")
+        if not read_tsv(args.neoantigen_cohort):
+            parts.append(NEOANTIGEN_NOT_RUN + "\n")
+        else:
+            parts.append(NEOANTIGEN_NOTE + "\n")
+            parts.append(tsv_markdown(
+                args.neoantigen_cohort, title="Neoantigen burden per sample",
+                only=["sample", "hla_alleles_typed",
+                      "hla_alleles_predictor_usable", "candidates_reported",
+                      "unique_candidates", "burden_strong_500nM",
+                      "burden_highaff_100nM", "expr_tpm_pass",
+                      "frameshift_neoantigens", "predictors",
+                      "predictors_note"]))
 
     if args.msi:
         parts.append("## Microsatellite instability (MSI)\n")
