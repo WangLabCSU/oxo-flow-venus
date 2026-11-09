@@ -177,3 +177,115 @@ python {config.venus_tools}/neoantigen_report.py \
     --out-md {output[2]} \
     2> {log}
 """
+
+# pVACfuse on the Manta SV deliverable (venus#31 P1 item 1). Manta's BND
+# records are converted to Arriba format by scripts/manta_to_arriba.py
+# (declared input, same scripts-as-inputs pattern as clinical.oxoflow), then
+# fed to pvacfuse (same envs/pvac as pvacseq: pvactools 7.1.5 + MHCflurry).
+# Complementary when-gates mirror sv.oxoflow: the PAIRED deliverable
+# (deliver/{pair_id}.sv.vcf.gz, PASS-only) for cohorts with normals, the
+# tumor-only candidateSV for tumor-only cohorts — exactly one of the two
+# rules can run per pair. Candidate SVs are explicitly UNSCORED calls: the
+# tumor-only fusion TSV is written to a distinct filename (...fuse.candidate
+# .filtered.tsv) so it is never confused with the PASS-scored one.
+# pvacfuse with zero processable fusions exits 0 WITHOUT writing a
+# filtered.tsv — the `||` fallback then writes an honest header-only TSV.
+[[rules]]
+name = "pvacfuse_run_paired"
+description = "pVACfuse MHC-I fusion neoantigen prediction from Manta SV (paired)"
+when = "config.tumor_only == 'true' && wildcard.control != ''"
+input = [
+    "deliver/{pair_id}.sv.vcf.gz",
+    "{config.gencode_gtf}",
+    "{config.genome_fa}",
+    "hla/{experiment}.alleles.tsv",
+    "{config.venus_tools}/manta_to_arriba.py",
+    "{config.venus_tools}/pvac_alleles.py",
+]
+output = [
+    "neoantigen/{pair_id}/fuse.filtered.tsv",
+    "neoantigen/{pair_id}/fuse.alleles.txt",
+]
+log = "logs/pvacfuse_{pair_id}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/pvac/pixi.toml" }
+shell = """
+mkdir -p neoantigen/{pair_id} logs && \
+rm -rf neoantigen/{pair_id}/fuse_run && \
+export MHCFLURRY_DATA_DIR={config.mhcflurry_data_dir} && \
+python {config.venus_tools}/manta_to_arriba.py \
+    --vcf {input[0]} \
+    --gencode {config.gencode_gtf} \
+    --genome-fa {config.genome_fa} \
+    --tumor-sample {experiment} \
+    --output neoantigen/{pair_id}/fuse.arriba.tsv \
+    2> {log} && \
+python {config.venus_tools}/pvac_alleles.py \
+    --alleles-tsv {input[3]} --min-alleles {config.neo_min_alleles} \
+    --out {output[1]} && \
+ALLELES=$(cat {output[1]}) && \
+pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
+    {config.neo_predictors} neoantigen/{pair_id}/fuse_run \
+    --binding-threshold {config.neo_binding_nm} \
+    --percentile-threshold-strategy exploratory \
+    --top-score-metric lowest \
+    --read-support 5 --expn-val 0.1 -d 1000 \
+    --n-threads {threads} \
+    >> {log} 2>&1 && \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
+    2>/dev/null || \
+printf 'fusion_id\tnote\\n\\tNo processable fusions from Manta SV (pvacfuse wrote no filtered.tsv)\\n' \
+    > {output[0]}
+"""
+
+# Tumor-only companion: candidateSV (explicitly UNSCORED calls — Manta marks
+# FILTER=.; not PASS) → distinct output filename for honesty.
+[[rules]]
+name = "pvacfuse_run_tumoronly"
+description = "pVACfuse MHC-I fusion neoantigen prediction from Manta candidateSV (tumor-only)"
+when = "config.tumor_only == 'true' && wildcard.control == ''"
+input = [
+    "deliver/{pair_id}.sv.candidate.vcf.gz",
+    "{config.gencode_gtf}",
+    "{config.genome_fa}",
+    "hla/{experiment}.alleles.tsv",
+    "{config.venus_tools}/manta_to_arriba.py",
+    "{config.venus_tools}/pvac_alleles.py",
+]
+output = [
+    "neoantigen/{pair_id}/fuse.candidate.filtered.tsv",
+    "neoantigen/{pair_id}/fuse.alleles.txt",
+]
+log = "logs/pvacfuse_{pair_id}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/pvac/pixi.toml" }
+shell = """
+mkdir -p neoantigen/{pair_id} logs && \
+rm -rf neoantigen/{pair_id}/fuse_run && \
+export MHCFLURRY_DATA_DIR={config.mhcflurry_data_dir} && \
+python {config.venus_tools}/manta_to_arriba.py \
+    --vcf {input[0]} \
+    --gencode {config.gencode_gtf} \
+    --genome-fa {config.genome_fa} \
+    --tumor-sample {experiment} \
+    --output neoantigen/{pair_id}/fuse.arriba.tsv \
+    2> {log} && \
+python {config.venus_tools}/pvac_alleles.py \
+    --alleles-tsv {input[3]} --min-alleles {config.neo_min_alleles} \
+    --out {output[1]} && \
+ALLELES=$(cat {output[1]}) && \
+pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
+    {config.neo_predictors} neoantigen/{pair_id}/fuse_run \
+    --binding-threshold {config.neo_binding_nm} \
+    --percentile-threshold-strategy exploratory \
+    --top-score-metric lowest \
+    --read-support 5 --expn-val 0.1 -d 1000 \
+    --n-threads {threads} \
+    >> {log} 2>&1 && \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
+    2>/dev/null || \
+printf 'fusion_id\\tnote\\n\\tNo processable fusions from Manta candidateSV (pvacfuse wrote no filtered.tsv; candidate SVs are unscored calls)\\n' \
+    > {output[0]}
+"""

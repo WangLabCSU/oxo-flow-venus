@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 
 import collect_neoantigen  # noqa: E402
 import hla_parse  # noqa: E402
+import manta_to_arriba as mta  # noqa: E402
 import neoantigen_report as nr  # noqa: E402
 import pvac_alleles  # noqa: E402
 
@@ -234,10 +235,6 @@ class NeoantigenReport(unittest.TestCase):
             self.assertNotIn("5-14%", md)  # audit M6: unsourced number gone
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class CollectNeoantigenTest(unittest.TestCase):
     """venus#34: per-sample neoantigen summaries -> one wide cohort table."""
 
@@ -293,3 +290,110 @@ class CollectNeoantigenTest(unittest.TestCase):
             self.assertEqual(by_b["burden_highaff_100nM"], "161")
             # deterministic sample order (sorted by input path)
             self.assertEqual([by_a["sample"], by_b["sample"]], ["GC01", "GC02"])
+
+
+class MantaToArribaTest(unittest.TestCase):
+    """venus#31 P1 item 1: Manta BND -> Arriba-format TSV for pVACfuse.
+
+    Tiny synthetic genome + GTF + VCF; fetch is injected so the conversion
+    core stays stdlib-only. Donor: GENEA (+ strand, chr1, CDS 51-150, ATG at
+    51..53, AAA codons, TAA stop at 141..143); acceptor: GENEB (- strand,
+    chr2, CDS 51-150, ATG at 51..53, CCC codons, TTT stop at 141..143).
+    """
+
+    GTF = (
+        "chr1\tg\tCDS\t51\t150\t.\t+\t.\t"
+        "gene_id \"T1\"; transcript_id \"T1\"; gene_name \"GENEA\";\n"
+        "chr2\tg\tCDS\t51\t150\t.\t-\t.\t"
+        "gene_id \"T2\"; transcript_id \"T2\"; gene_name \"GENEB\";\n")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = self._tmp.name
+        write_tsv(os.path.join(tmp, "g.gtf"), self.GTF)
+        self.gtf = os.path.join(tmp, "g.gtf")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    @staticmethod
+    def fetch(chrom, s, e):
+        genome = {
+            "chr1": ("N" * 50 + "ATG" + "AAA" * 29 + "TAA" + "GGG" * 2),
+            "chr2": ("N" * 50 + "ATG" + "CCC" * 29 + "TTT" + "GGG" * 2),
+        }
+        genome = {c: s2.ljust(200, "N") for c, s2 in genome.items()}
+        return genome[chrom][s:e]
+
+    def make_vcf(self, alt_a, alt_b, samples=("TUMOR",), pr="1,12",
+                 sr="0,7"):
+        lines = [
+            "##fileformat=VCFv4.2",
+            "##INFO=<ID=MATEID,Number=.,Type=String>",
+            "##INFO=<ID=SVTYPE,Number=1,Type=String>",
+            "##FORMAT=<ID=PR,Number=1,Type=Integer>",
+            "##FORMAT=<ID=SR,Number=1,Type=Integer>",
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
+            + "\t".join(samples),
+            "chr1\t100\tBND_A\tN\t%s\t.\tPASS\tSVTYPE=BND;MATEID=BND_B\t"
+            "PR:SR\t%s" % (alt_a, ":".join([pr, sr] * len(samples))),
+            "chr2\t120\tBND_B\tN\t%s\t.\tPASS\tSVTYPE=BND;MATEID=BND_A\t"
+            "PR:SR\t%s" % (alt_b, ":".join([pr, sr] * len(samples))),
+        ]
+        path = os.path.join(self._tmp.name, "bnd.vcf")
+        write_tsv(path, "\n".join(lines) + "\n")
+        return path
+
+    def run_convert(self, alt_a, alt_b, samples=("TUMOR",)):
+        rows, skipped = mta.convert(self.make_vcf(alt_a, alt_b, samples),
+                                    self.gtf, self.fetch)
+        return rows, skipped
+
+    def test_valid_pair_yields_row_with_junction_and_support(self):
+        # BND_A keeps LEFT of chr1:100 (five' for the + gene), BND_B keeps
+        # RIGHT of chr2:120 (three' for the - gene) -> one 5'/3' fusion.
+        rows, skipped = self.run_convert("N]chr2:120]", "]chr1:100]N")
+        self.assertEqual(skipped, {})
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual(r["#gene1"], "GENEA")
+        self.assertEqual(r["gene2"], "GENEB")
+        self.assertEqual(r["breakpoint1"], "chr1:100")
+        self.assertEqual(r["breakpoint2"], "chr2:120")
+        self.assertIn("|", r["peptide_sequence"])
+        # donor side = MKKKKK...; acceptor side = revcomp of chr2 piece
+        self.assertTrue(r["peptide_sequence"].startswith("MK"))
+        self.assertEqual(r["reading_frame"], "out-of-frame")
+        self.assertEqual(r["split_reads1"], 7)
+        self.assertEqual(r["split_reads2"], 7)
+        self.assertEqual(r["discordant_mates"], 12)
+        self.assertEqual(r["FUSION_ID"], "BND_A|BND_B")
+
+    def test_head_to_head_has_no_53_model_and_is_skipped(self):
+        # Both sides keep a transcript-UPSTREAM piece -> no 5'/3' model.
+        rows, skipped = self.run_convert("N[chr2:120[", "]chr1:100]N")
+        self.assertEqual(rows, [])
+        self.assertIn("no 5'/3' transcript model (head/tail-to-tail or "
+                      "strand clash)", skipped)
+
+    def test_two_sample_vcf_picks_highest_support_sample(self):
+        # NORMAL carries more PR+SR alt support than TUMOR -> picked, with a
+        # stderr warning (auto-detection is honest, never silent).
+        rows, _ = self.run_convert("N]chr2:120]", "]chr1:100]N",
+                                   samples=("NORMAL", "TUMOR"))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["split_reads1"], 7)
+
+    def test_zero_fusions_writes_header_only_tsv(self):
+        out = os.path.join(self._tmp.name, "out.tsv")
+        vcf = self.make_vcf("N[chr2:120[", "]chr1:100]N")
+        rc = mta.MantaToArriba(self.gtf, self.fetch).run(vcf, out)
+        self.assertEqual(rc, 0)
+        with open(out) as fh:
+            lines = fh.read().splitlines()
+        self.assertEqual(lines[0].split("\t"), mta.ARRIBA_COLUMNS)
+        self.assertEqual(len(lines), 1)  # header only
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
