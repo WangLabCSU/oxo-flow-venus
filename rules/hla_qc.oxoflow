@@ -30,13 +30,19 @@ description = "RNA-side HLA typing (arcasHLA), SpecHLA-vs-arcasHLA typing consis
 # arcasHLA two-step (extract then genotype) on the STAR BAM:
 #   1. `arcasHLA extract` pulls HLA + decoy reads out of the BAM (it runs
 #      samtools index itself when .bai is missing — verified in extract.py —
-#      so rna/star's .bam-without-declared-.bai is safe), writing
-#      {sample}.extracted.{1,2}.fq.gz under the fresh workdir.
+#      so rna/star's .bam-without-declared-.bai is safe). CAUTION (verified
+#      from the 0.6.0 package source): extract has NO --sample flag — the
+#      extracted FASTQ names come from splitext(basename(BAM)), i.e.
+#      {sample}.Aligned.sortedByCoord.out.extracted.{1,2}.fq.gz here.
 #   2. `arcasHLA genotype` types classical HLA-I/II genes from the extracted
 #      FASTQs against the env-prefix dat/ reference (bring-up:
 #      scripts/prepare_arcas_ref.sh, one-time per machine) and writes
-#      {sample}.genotype.json. Loci under min_count 75 are silently omitted
-#      from the JSON; hla_consistency.py renders that honestly as absent_rna.
+#      {outdir}/{sample}.genotype.json where the sample label is
+#      basename(first FASTQ).split('.')[0] (verified in genotype.py:665) —
+#      for the STAR BAM that is exactly {sample} = the "{pair_id}-TR"
+#      convention, so the JSON lands at the path hla_dna_rna_qc consumes.
+#      Loci under min_count 75 are silently omitted from the JSON;
+#      hla_consistency.py renders that honestly as absent_rna.
 # -g all: all classical genes (default, explicit here); --min_count left at
 # arcasHLA's 75 default.
 [[rules]]
@@ -61,17 +67,16 @@ when = "config.run_hla_rna == 'true' && wildcard.assay == 'rnaseq'"
 shell = """
 rm -rf hla_rna/{sample} && mkdir -p hla_rna/{sample}/logs && \
 arcasHLA extract \
-    --sample {sample} \
     --outdir hla_rna/{sample} \
     --threads {threads} \
     {input[0]} \
     2> hla_rna/{sample}/logs/extract.log && \
 arcasHLA genotype \
-    --sample {sample} \
     -g all \
     --outdir hla_rna/{sample} \
     --threads {threads} \
-    hla_rna/{sample}/{sample}.extracted.1.fq.gz hla_rna/{sample}/{sample}.extracted.2.fq.gz \
+    hla_rna/{sample}/{sample}.Aligned.sortedByCoord.out.extracted.1.fq.gz \
+    hla_rna/{sample}/{sample}.Aligned.sortedByCoord.out.extracted.2.fq.gz \
     2> hla_rna/{sample}/logs/genotype.log
 """
 
