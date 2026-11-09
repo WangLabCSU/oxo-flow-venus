@@ -28,6 +28,9 @@ import sys
 CAND_COLS = ["gene", "variant_type", "hla_allele", "epitope", "aa_change",
              "protein_position", "mt_score_nm", "mt_percentile",
              "tumor_vaf", "gene_tpm", "expr_pass", "transcript"]
+# Appended to candidates output ONLY when --scrna-corr carries rows, so the
+# base schema stays stable for existing consumers.
+SCRNA_CAND_COLS = ["scrna_pct_expressing", "scrna_per_cluster_pct", "scrna_note"]
 SUMMARY_COLS = ["class", "metric", "value", "detail"]
 
 ALIASES = {
@@ -124,6 +127,32 @@ def read_tpm_map(counts_path, gene_map_path):
         return {}
 
 
+def read_scrna_corr(path):
+    """scrna_corroboration.py TSV -> {gene: {pct, per_cluster, note}}.
+
+    Missing file / unreadable rows degrade to {} with a stderr warning (the
+    corroboration is optional by design); a present-but-malformed HEADER
+    fails loud, matching this script's other input contracts.
+    """
+    with open_tsv(path) as fh:
+        lines = fh.read().splitlines()
+    if not lines:
+        sys.exit(f"[neoantigen_report] {path} is empty")
+    header = lines[0].split("\t")
+    expected = ["gene", "n_cells_total", "n_expressing", "pct_expressing",
+                "mean_expr_positive", "per_cluster_pct", "note"]
+    if header != expected:
+        sys.exit(f"[neoantigen_report] {path}: unexpected header {header} — "
+                 f"expected {expected} (scrna_corroboration.py output)")
+    out = {}
+    for ln in lines[1:]:
+        p = ln.split("\t")
+        if len(p) < 7 or not p[0]:
+            continue
+        out[p[0]] = {"pct": p[3], "per_cluster": p[5], "note": p[6]}
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pvac-tsv", required=True)
@@ -132,6 +161,9 @@ def main():
                     help="pvac_alleles.txt — the predictor-usable allele list")
     ap.add_argument("--counts", default="")
     ap.add_argument("--gene-map", default="")
+    ap.add_argument("--scrna-corr", default="",
+                    help="scrna_corroboration.py TSV (optional) — adds "
+                         "scrna_* columns + a summary row")
     ap.add_argument("--patient", required=True)
     ap.add_argument("--mode", default="tumor_only",
                     choices=["tumor_only", "paired"])
@@ -171,6 +203,20 @@ def main():
         r["gene_tpm"] = f"{v:.2f}" if v is not None else ""
         r["expr_pass"] = ("yes" if v is not None and v >= args.expr_tpm
                           else "no")
+
+    # scRNA corroboration (venus#31 P1 item 5): optional per-gene %positive
+    # from the pair's own filter_feature.h5ad. Empty input => base schema.
+    # CAVEAT travels with the data: dnbc4tools h5ad has NO malignant-cell
+    # annotation, so the percentage is over ALL filtered cells — a coarse
+    # signal, never tumor-cell expression prevalence.
+    corr = read_scrna_corr(args.scrna_corr) if args.scrna_corr else {}
+    for r in cands:
+        c = corr.get(r.get("gene", ""))
+        r["scrna_pct_expressing"] = c["pct"] if c else ""
+        r["scrna_per_cluster_pct"] = c["per_cluster"] if c else ""
+        r["scrna_note"] = (c["note"] if c else
+                           ("no_scrna_corroboration_run" if args.scrna_corr
+                            else ""))
 
     for r in cands:
         r["_s"] = fnum(r.get("mt_score_nm"))
@@ -235,6 +281,21 @@ def main():
         {"class": "neoantigen", "metric": "mode", "value": args.mode,
          "detail": mode_caveat},
     ]
+    if corr:
+        n_corr = sum(1 for r in cands if r["scrna_pct_expressing"])
+        n_not_found = sum(1 for r in cands
+                          if r.get("scrna_note") == "gene_not_in_scRNA_matrix")
+        summary.append({
+            "class": "neoantigen", "metric": "scrna_pct_expressing",
+            "value": n_corr,
+            "detail": f"candidate genes with scRNA corroboration from the "
+                      f"pair's own filter_feature.h5ad; %positive is over "
+                      f"ALL filtered cells — NO malignant-cell annotation "
+                      f"exists in the h5ad, so a low pct can mean low tumor "
+                      f"fraction, not absent expression; {n_not_found} gene"
+                      f"s absent from the matrix (explicit note, not silent "
+                      f"zero)"})
+    out_cand_cols = CAND_COLS + (SCRNA_CAND_COLS if corr else [])
 
     with open(args.out_summary, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=SUMMARY_COLS, delimiter="\t",
@@ -243,11 +304,11 @@ def main():
         w.writerows(summary)
 
     with open(args.out_candidates, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=CAND_COLS, delimiter="\t",
+        w = csv.DictWriter(fh, fieldnames=out_cand_cols, delimiter="\t",
                            lineterminator="\n")
         w.writeheader()
         for r in cands:
-            w.writerow({c: r.get(c, "") for c in CAND_COLS})
+            w.writerow({c: r.get(c, "") for c in out_cand_cols})
 
     with open(args.out_md, "w") as fh:
         fh.write(f"## Neoantigen candidates — {args.patient}\n\n")
@@ -260,15 +321,37 @@ def main():
                  f"{n_fs} frameshift-derived\n")
         fh.write(f"- Expression filter (TPM >= {args.expr_tpm:g}): "
                  f"{n_tpm_pass}/{len(strong_rows) or 0} strong binders pass\n")
+        if corr:
+            n_corr = sum(1 for r in cands if r["scrna_pct_expressing"])
+            fh.write(f"- scRNA corroboration: {n_corr} candidate genes "
+                     f"annotated with %positive from the pair's own "
+                     f"filter_feature.h5ad — **over ALL filtered cells "
+                     f"(no malignant-cell annotation in the h5ad): a low "
+                     f"pct can mean low tumor fraction, not absent "
+                     f"expression**; per-cluster breakdown is for eyeballing "
+                     f"concentration, no cluster is labeled malignant\n")
         fh.write(f"- Predictors: {args.predictors}. {class2_note}.\n")
         fh.write(f"- Caveat: {mode_caveat}\n\n")
-        fh.write("| Gene | HLA | Epitope | IC50(nM) | TPM | VAF | Type |\n")
-        fh.write("|---|---|---|---|---|---|---|\n")
-        for r in cands[:args.top_n]:
-            fh.write(f"| {r.get('gene','')} | {r.get('hla_allele','')} | "
-                     f"{r.get('epitope','')} | {r.get('mt_score_nm','')} | "
-                     f"{r.get('gene_tpm','')} | {r.get('tumor_vaf','')} | "
-                     f"{r.get('variant_type','')} |\n")
+        if corr:
+            fh.write("| Gene | HLA | Epitope | IC50(nM) | TPM | VAF | Type | "
+                     "scRNA %pos | scRNA per-cluster | scRNA note |\n")
+            fh.write("|---|---|---|---|---|---|---|---|---|---|\n")
+            for r in cands[:args.top_n]:
+                fh.write(f"| {r.get('gene','')} | {r.get('hla_allele','')} | "
+                         f"{r.get('epitope','')} | {r.get('mt_score_nm','')} | "
+                         f"{r.get('gene_tpm','')} | {r.get('tumor_vaf','')} | "
+                         f"{r.get('variant_type','')} | "
+                         f"{r.get('scrna_pct_expressing','')} | "
+                         f"{r.get('scrna_per_cluster_pct','')} | "
+                         f"{r.get('scrna_note','')} |\n")
+        else:
+            fh.write("| Gene | HLA | Epitope | IC50(nM) | TPM | VAF | Type |\n")
+            fh.write("|---|---|---|---|---|---|---|\n")
+            for r in cands[:args.top_n]:
+                fh.write(f"| {r.get('gene','')} | {r.get('hla_allele','')} | "
+                         f"{r.get('epitope','')} | {r.get('mt_score_nm','')} | "
+                         f"{r.get('gene_tpm','')} | {r.get('tumor_vaf','')} | "
+                         f"{r.get('variant_type','')} |\n")
     sys.stderr.write(f"[neoantigen_report] {args.patient}: {len(cands)} unique "
                      f"candidates, {n_strong} strong -> {args.out_summary}\n")
 

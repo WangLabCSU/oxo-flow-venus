@@ -213,6 +213,19 @@ run_hla_rna = "false"
 run_hla_loh = "false"
 hla_loh_het_cutoff = 5
 
+# scRNA corroboration of neoantigen candidates (venus#31 P1 item 5,
+# scrna_corroboration + neoantigen_report_scrna): %positive of each candidate
+# gene in the pair's OWN scrna/count/{pair_id}/outs/filter_feature.h5ad,
+# merged into the per-patient neoantigen report as scrna_* columns.
+# "false" (default): opt-in — (a) the h5ad only exists for cohorts that ran
+# the scrna module; (b) the corroboration runs in envs/scrna (the only env
+# with h5py — reused, so NO new env and NO new lock gap). HONEST CAVEAT:
+# dnbc4tools' h5ad carries NO malignant-cell annotation, so %positive is
+# over ALL filtered cells of the sample — a coarse "is the mutated gene
+# expressed at all" signal, never tumor-cell expression prevalence; the
+# caveat travels with the data (report summary detail + markdown).
+run_scrna_corr = "false"
+
 # Pipeline helpers
 venus_tools = "scripts"
 

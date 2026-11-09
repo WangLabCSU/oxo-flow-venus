@@ -688,5 +688,178 @@ class HlaLohTest(unittest.TestCase):
         self.assertIn("missing freq file", proc.stderr)
 
 
+class ScrnaCorroborationTest(unittest.TestCase):
+    """venus#31 P1 item 5: scRNA %positive corroboration per candidate gene.
+
+    h5ad fixtures are built IN-TEST with h5py (importable where these tests
+    run; envs/scrna is the only venus env carrying it) and mirror the anndata
+    0.1.0 on-disk schema the h5py-only reader supports: var/obs _index
+    (nullable-string Group or flat Dataset) and dense X / csr / csc_matrix
+    Groups. Covers: dense vs CSR vs CSC equivalence, explicit-zero handling,
+    gene-absent note (never a silent zero), the '-1' barcode-suffix fallback,
+    and the corroboration merge in neoantigen_report (--scrna-corr optional
+    input; base candidate schema stays stable without it).
+    """
+
+    GENES = ["EGFR", "KRAS", "TP53", "ABCF1"]
+    # 6 cells x 4 genes; EGFR positive in cells 0,2,4 -> 3/6, mean (5+3+1)/3
+    M = [[5.0, 0.0, 1.0, 0.0],
+         [0.0, 2.0, 0.0, 0.0],
+         [3.0, 0.0, 0.0, 4.0],
+         [0.0, 0.0, 2.0, 0.0],
+         [1.0, 0.0, 0.0, 0.0],
+         [0.0, 0.0, 0.0, 0.0]]
+    BARCODES = ["AAAC-1", "AAAD-1", "AAAE-1", "AAAF-1", "AAAG-1", "AAAH-1"]
+    CLUSTER_CSV = ("barcode,cluster\nAAAC-1,c0\nAAAD-1,c1\nAAAE-1,c0\n"
+                   "AAAF-1,c1\nAAAG-1,c0\nAAAH-1,c0\n")
+    PVAC = ("Gene Name\tVariant Type\tHLA Allele\tBest MT IC50 Score\n"
+            "EGFR\tsnv\tHLA-A*02:01\t12.5\n"
+            "KRAS\tsnv\tHLA-A*02:01\t88.0\n"
+            "NOTINMATRIX\tframeshift\tHLA-B*07:02\t50.0\n"
+            "TP53\tsnv\tHLA-C*01:02\t6.2\n")
+
+    def setUp(self):
+        try:
+            import h5py  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest("h5py unavailable on this runner")
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = self._tmp.name
+        self.pvac = os.path.join(tmp, "filtered.tsv")
+        write_tsv(self.pvac, self.PVAC)
+        self.cluster_csv = os.path.join(tmp, "cluster.csv")
+        write_tsv(self.cluster_csv, self.CLUSTER_CSV)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_h5ad(self, kind, barcodes=None, name=None):
+        """Build a minimal anndata-schema h5ad with X in the given encoding."""
+        import h5py
+        import numpy as np
+        barcodes = barcodes or self.BARCODES
+        hp = os.path.join(self._tmp.name,
+                          name or f"{kind}_{len(barcodes)}.h5ad")
+        m = np.array(self.M, dtype=np.float64)
+        with h5py.File(hp, "w") as f:
+            # anndata 0.1.0 nullable-string encoding: <frame>/_index/Group{values}
+            for frame, names in (("var", self.GENES), ("obs", barcodes)):
+                fr = f.create_group(frame)
+                ix = fr.create_group("_index")
+                ix.create_dataset("values",
+                                  data=[n.encode() for n in names])
+            r, c = np.nonzero(m)
+            if kind == "dense":
+                x = f.create_dataset("X", data=m)
+                x.attrs["encoding-type"] = "array"
+            else:
+                g = f.create_group("X")
+                g.attrs["encoding-type"] = f"{kind}_matrix"
+                g.attrs["shape"] = m.shape
+                if kind == "csr":
+                    order = np.argsort(r, kind="stable")
+                    vals, idx = m[r[order], c[order]], c[order]
+                    counts = np.bincount(r, minlength=m.shape[0])
+                else:
+                    order = np.argsort(c, kind="stable")
+                    vals, idx = m[r[order], c[order]], r[order]
+                    counts = np.bincount(c, minlength=m.shape[1])
+                g.create_dataset("data", data=vals)
+                g.create_dataset("indices", data=idx)
+                g.create_dataset("indptr", data=np.concatenate(
+                    ([0], np.cumsum(counts))).astype(np.int64))
+        return hp
+
+    def run_corr(self, h5ad_path, with_cluster=False, out=None):
+        out = out or os.path.join(self._tmp.name, "corr.tsv")
+        cmd = [sys.executable,
+               os.path.join(REPO, "scripts", "scrna_corroboration.py"),
+               "--h5ad", h5ad_path, "--pvac-tsv", self.pvac, "--out", out]
+        if with_cluster:
+            cmd += ["--cluster", self.cluster_csv]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        with open(out) as fh:
+            rows = list(csv.DictReader(fh, delimiter="\t"))
+        return rows, proc.stderr
+
+    def test_dense_csr_csc_agree_and_missing_gene_note(self):
+        for kind in ("dense", "csr", "csc"):
+            rows, err = self.run_corr(self._write_h5ad(kind))
+            by_gene = {r["gene"]: r for r in rows}
+            self.assertEqual(by_gene["EGFR"]["n_cells_total"], "6")
+            self.assertEqual(by_gene["EGFR"]["n_expressing"], "3")
+            self.assertEqual(by_gene["EGFR"]["pct_expressing"], "50.0")
+            self.assertEqual(by_gene["EGFR"]["mean_expr_positive"], "3.00")
+            self.assertEqual(by_gene["KRAS"]["n_expressing"], "1")
+            self.assertEqual(by_gene["KRAS"]["pct_expressing"], "16.7")
+            # TP53 column [1,0,0,2,0,0]: 2/6 positive, mean (1+2)/2
+            self.assertEqual(by_gene["TP53"]["n_expressing"], "2")
+            self.assertEqual(by_gene["TP53"]["mean_expr_positive"], "1.50")
+            # absent gene: explicit note, never a silent zero row
+            self.assertEqual(by_gene["NOTINMATRIX"]["note"],
+                             "gene_not_in_scRNA_matrix")
+            self.assertEqual(by_gene["NOTINMATRIX"]["pct_expressing"], "")
+            self.assertIn("no malignant-cell annotation", err)
+
+    def test_per_cluster_breakdown(self):
+        rows, _ = self.run_corr(self._write_h5ad("dense"), with_cluster=True)
+        by_gene = {r["gene"]: r for r in rows}
+        # c0 = cells 0,2,4,5; c1 = cells 1,3
+        self.assertEqual(by_gene["EGFR"]["per_cluster_pct"],
+                         "c0:3/4; c1:0/2")
+        self.assertEqual(by_gene["KRAS"]["per_cluster_pct"], "c0:0/4; c1:1/2")
+        self.assertEqual(by_gene["TP53"]["per_cluster_pct"],
+                         "c0:1/4; c1:1/2")
+
+    def test_barcode_suffix_fallback(self):
+        # h5ad barcodes bare (dnbc4tools style), cluster.csv carries '-1'
+        # (10x style): exact match matches nothing -> suffix-strip retry.
+        rows, err = self.run_corr(
+            self._write_h5ad("dense", barcodes=[b.split("-")[0]
+                                                for b in self.BARCODES]),
+            with_cluster=True)
+        by_gene = {r["gene"]: r for r in rows}
+        self.assertEqual(by_gene["EGFR"]["per_cluster_pct"], "c0:3/4; c1:0/2")
+
+    def test_bad_header_fails_loud(self):
+        bad = os.path.join(self._tmp.name, "bad.tsv")
+        write_tsv(bad, "gene\tpct\nEGFR\t50\n")
+        with self.assertRaises(SystemExit):
+            nr.read_scrna_corr(bad)
+
+    def test_report_merges_corroboration_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            corr = os.path.join(tmp, "corr.tsv")
+            self.run_corr(self._write_h5ad("dense"), with_cluster=True,
+                          out=corr)
+            rows_text = ("EGFR\tmissense_variant\tHLA-A*02:01\tGVLVGVAPE\t"
+                         "2.5\t0.1\t0.4\tp.E12D\t12\tENST1\n"
+                         "ZZZ9\tframeshift_variant\tHLA-B*07:02\tYYYYYYYYL\t"
+                         "100\t2\t0.2\tp.R1fs\t1\tENST3\n")
+            hla = "T1\tA\tHLA-A*02:01\tHLA-A*24:02\n"
+            summary, cands, md = run_report(
+                tmp, rows_text, hla, extra=["--scrna-corr", corr])
+            # one candidate gene (EGFR) carries a %positive value
+            self.assertIn(("scrna_pct_expressing", "1"), summary)
+            egfr = next(c for c in cands if c["gene"] == "EGFR")
+            self.assertEqual(egfr["scrna_pct_expressing"], "50.0")
+            self.assertEqual(egfr["scrna_per_cluster_pct"], "c0:3/4; c1:0/2")
+            # gene in pVAC output but not in the corroboration TSV at all
+            zz = next(c for c in cands if c["gene"] == "ZZZ9")
+            self.assertEqual(zz["scrna_note"], "no_scrna_corroboration_run")
+            # absent-from-matrix gene keeps the explicit note through merge
+            # (NOTINMATRIX is not among pVAC rows here; use a corr row check)
+            # schema stability: a run WITHOUT --scrna-corr keeps base columns
+            _, cands2, _ = run_report(tmp, rows_text, hla)
+            self.assertNotIn("scrna_pct_expressing", cands2[0])
+            self.assertNotIn("scrna_note", cands2[0])
+            self.assertEqual(sorted(cands2[0].keys()),
+                             sorted(nr.CAND_COLS))
+            # md: caveat bullet + extended top-N table
+            self.assertIn("over ALL filtered cells", md)
+            self.assertIn("no malignant-cell annotation", md)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

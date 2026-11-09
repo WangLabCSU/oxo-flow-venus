@@ -141,10 +141,18 @@ cp neoantigen/{pair_id}/run/MHC_Class_I/*.filtered.tsv {output[0]}
 # expression filter from the pair's RNA featureCounts. The RNA sample name
 # follows the venus cohort convention "{pair_id}-TR" (same key convention as
 # groups.tsv bulkRNA); cohorts deviating from it should extend this rule.
+#
+# Tumor-only gating (venus#31 P1 item 5): when the optional scRNA
+# corroboration is enabled (config.run_scrna_corr), the complementary twin
+# rule neoantigen_report_scrna below takes over this rule's three output
+# paths and passes the corroboration TSV as --scrna-corr (the engine has no
+# conditional inputs; the msi_cohort / msi_cohort_tumoronly
+# shared-output-path complementary-when-gate pattern). Exactly one of the
+# two rules runs per pair, so the outputs are never produced twice.
 [[rules]]
 name = "neoantigen_report"
 description = "Neoantigen burden + QC report (expression filter)"
-when = "config.tumor_only == 'true'"
+when = "config.tumor_only == 'true' && config.run_scrna_corr != 'true'"
 input = [
     "neoantigen/{pair_id}/filtered.tsv",
     "hla/{experiment}.alleles.tsv",
@@ -288,4 +296,92 @@ cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
     2>/dev/null || \
 printf 'fusion_id\\tnote\\n\\tNo processable fusions from Manta candidateSV (pvacfuse wrote no filtered.tsv; candidate SVs are unscored calls)\\n' \
     > {output[0]}
+"""
+
+# ---------------------------------------------------- scRNA corroboration ---
+# venus#31 P1 item 5: %positive of each candidate gene in the pair's OWN
+# single-cell profile, from scrna/count/{pair_id}/outs/filter_feature.h5ad
+# (dnbc4tools), optionally split per cluster via outs/analysis/cluster.csv.
+#
+# HONEST CAVEAT (also embedded in the report text by neoantigen_report.py):
+# the dnbc4tools h5ad has NO malignant-cell annotation, so %positive is over
+# ALL filtered cells of the sample — a low value can mean low tumor fraction,
+# not absent expression. The per-cluster breakdown is for eyeballing
+# concentration only; no cluster is labeled malignant here.
+#
+# Input choice: the gene list comes from neoantigen/{pair_id}/filtered.tsv
+# (pVACseq output), NOT from the report rule's candidates.tsv — consuming
+# this rule's own downstream output would create a circular dependency.
+#
+# Environment: envs/scrna is the ONLY venus env with h5py (envs/report and
+# envs/qc lack it); reusing it creates NO new env and NO new lock gap.
+# Opt-in via config.run_scrna_corr (venus.oxoflow) — the h5ad only exists
+# for cohorts that ran the scrna module, and envs/scrna computes the whole
+# scanpy stack regardless.
+[[rules]]
+name = "scrna_corroboration"
+description = "Per-gene %positive of neoantigen candidates in the pair's filter_feature.h5ad"
+when = "config.tumor_only == 'true' && config.run_scrna_corr == 'true'"
+input = [
+    "scrna/count/{pair_id}/outs/filter_feature.h5ad",
+    "neoantigen/{pair_id}/filtered.tsv",
+    "scrna/count/{pair_id}/outs/analysis/cluster.csv",
+    "{config.venus_tools}/scrna_corroboration.py",
+]
+output = ["scrna_corr/{pair_id}.tsv"]
+protected_output = ["scrna_corr/{pair_id}.tsv"]
+log = "logs/scrna_corr_{pair_id}.log"
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/scrna/pixi.toml" }
+shell = """
+mkdir -p scrna_corr logs && \
+python {config.venus_tools}/scrna_corroboration.py \
+    --h5ad {input[0]} \
+    --pvac-tsv {input[1]} \
+    --cluster {input[2]} \
+    --out {output[0]} \
+    2> {log}
+"""
+
+# Complementary twin of neoantigen_report (same three output paths,
+# complementary when-gates — msi_cohort / msi_cohort_tumoronly pattern): the
+# only difference is input[5], the corroboration TSV, passed as --scrna-corr.
+[[rules]]
+name = "neoantigen_report_scrna"
+description = "Neoantigen burden + QC report (expression filter + scRNA corroboration)"
+when = "config.tumor_only == 'true' && config.run_scrna_corr == 'true'"
+input = [
+    "neoantigen/{pair_id}/filtered.tsv",
+    "hla/{experiment}.alleles.tsv",
+    "neoantigen/{pair_id}/alleles.txt",
+    "rna/counts/{pair_id}-TR.featurecounts.txt",
+    "ref/gene_symbols.tsv",
+    "scrna_corr/{pair_id}.tsv",
+]
+output = [
+    "neoantigen/{pair_id}.candidates.tsv",
+    "neoantigen/{pair_id}.summary.tsv",
+    "neoantigen/{pair_id}.report.md",
+]
+log = "logs/neoantigen_report_{pair_id}.log"
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+python {config.venus_tools}/neoantigen_report.py \
+    --pvac-tsv {input[0]} \
+    --hla-tsv {input[1]} \
+    --usable-alleles {input[2]} \
+    --counts {input[3]} \
+    --gene-map {input[4]} \
+    --scrna-corr {input[5]} \
+    --patient {pair_id} \
+    --mode tumor_only \
+    --predictors '{config.neo_predictors}' \
+    --strong-nm {config.neo_binding_nm} \
+    --out-candidates {output[0]} \
+    --out-summary {output[1]} \
+    --out-md {output[2]} \
+    2> {log}
 """
