@@ -268,7 +268,7 @@ environment = { pixi = "envs/report/pixi.toml" }
 when = "config.tumor_only != 'true'"
 shell = """
 mkdir -p report logs && \
-printf 'sample\thla_alleles_typed\thla_alleles_predictor_usable\tunique_candidates\tburden_strong_500nM\tburden_highaff_100nM\texpr_tpm_pass\tframeshift_neoantigens\tpredictors\tpredictors_note\n' \
+printf 'sample\thla_alleles_typed\thla_alleles_predictor_usable\tcandidates_reported\tunique_candidates\tburden_strong_500nM\tburden_highaff_100nM\texpr_tpm_pass\tframeshift_neoantigens\tpredictors\tpredictors_note\n' \
     > report/neoantigen_cohort.tsv && \
 printf '[neoantigen_cohort_paired] paired cohort: neoantigen module is tumor-only-gated (venus#31)\n' \
     > logs/neoantigen_cohort.log

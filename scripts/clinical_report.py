@@ -494,10 +494,11 @@ def main() -> int:
             parts.append(tsv_markdown(
                 args.neoantigen_cohort, title="Neoantigen burden per sample",
                 only=["sample", "hla_alleles_typed",
-                      "hla_alleles_predictor_usable", "unique_candidates",
-                      "burden_strong_500nM", "burden_highaff_100nM",
-                      "expr_tpm_pass", "frameshift_neoantigens",
-                      "predictors", "predictors_note"]))
+                      "hla_alleles_predictor_usable", "candidates_reported",
+                      "unique_candidates", "burden_strong_500nM",
+                      "burden_highaff_100nM", "expr_tpm_pass",
+                      "frameshift_neoantigens", "predictors",
+                      "predictors_note"]))
 
     if args.msi:
         parts.append("## Microsatellite instability (MSI)\n")

@@ -16,6 +16,7 @@ Usage:
       --output report/neoantigen_cohort.tsv
 """
 import argparse
+import csv
 import os
 import sys
 
@@ -23,6 +24,7 @@ COLUMNS = [
     "sample",
     "hla_alleles_typed",
     "hla_alleles_predictor_usable",
+    "candidates_reported",
     "unique_candidates",
     "burden_strong_500nM",
     "burden_highaff_100nM",
@@ -34,7 +36,6 @@ COLUMNS = [
 
 
 def read_tsv(path):
-    import csv
     with open(path, newline="") as fh:
         return list(csv.DictReader(fh, delimiter="\t"))
 
