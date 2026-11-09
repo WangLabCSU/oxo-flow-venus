@@ -572,5 +572,121 @@ class HlaConsistencyTest(unittest.TestCase):
         self.assertIn("unreadable", err)
 
 
+class HlaLohTest(unittest.TestCase):
+    """spechla-loh driver (venus#31 P1 item 4) — fake-spechla-loh harness."""
+
+    PURITY_TSV = (
+        "pair\tsample\tpurity\tploidy\tpsi\taberrant_cell_fraction\t"
+        "goodness_of_fit\tnon_aberrant\tfailed\tn_segments\n"
+        "Pt01\tPt01-TD\t0.72\t2.9\t2\t0.71\t0.91\tFALSE\tFALSE\t41\n")
+
+    # merge.hla.copy.txt as cal.hla.copy.pl writes it (verified header;
+    # the tool's tag==0 homogeneous row puts a real allele in KeptHLA and
+    # the literal "homogeneous" in LossHLA)
+    MERGE = (
+        "Sample\tHLA\tAllele1\tAllele2\tcopyratio\tKeptHLA\tLossHLA\tFreq1\t"
+        "Freq2\tPurity\tHet_num\tLOH\n"
+        "Pt01-TD\tA\tHLA-A*02:01\tHLA-A*29:02\t2:1\tHLA-A*29:02\t"
+        "HLA-A*02:01\t0.62\t0.38\t0.72\t17\tY\n"
+        "Pt01-TD\tB\tHLA-B*07:02\tHLA-B*44:03\t1:1\tHLA-B*44:03\t"
+        "HLA-B*07:02\t0.51\t0.49\t0.72\t23\tN\n"
+        "Pt01-TD\tC\tHLA-C*07:01\tHLA-C*01:02\t3:3\tHLA-C*07:01\t"
+        "homogeneous\t1.0\t0.0\t0.72\t9\tN\n")
+
+    FREQ_SAMPLE = (
+        "# Haplotype\tFrequency\n"
+        "hla.allele.1.HLA_A.fasta\t0.62\n"
+        "hla.allele.2.HLA_A.fasta\t0.38\n"
+        "# The number of heterozygous variant is 17\n")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        tmp = self._tmp.name
+        # fake spechla-loh: echoes args to a log, writes merge.hla.copy.txt
+        # into the -O dir, exits 0 — mimics cal.hla.copy.pl's contract.
+        self.bin_dir = os.path.join(tmp, "bin")
+        os.mkdir(self.bin_dir)
+        fake = os.path.join(self.bin_dir, "spechla-loh")
+        write_tsv(fake, "#!/bin/bash\n")
+        with open(fake, "a") as fh:
+            fh.write(
+                'args=("$@"); outdir=""; while [ $# -gt 0 ]; do case "$1" in '
+                '-O) outdir="$2";; esac; shift; done\n'
+                'printf \'%s\\n\' "${args[@]}" > "$outdir/spechla-loh.args"\n'
+                'cat > "$outdir/merge.hla.copy.txt" <<\'MERGE_EOF\'\n'
+                + self.MERGE + "MERGE_EOF\n")
+        os.chmod(fake, 0o755)
+        # inputs
+        self.purity = os.path.join(tmp, "purity.tsv")
+        write_tsv(self.purity, self.PURITY_TSV)
+        self.result = os.path.join(tmp, "hla.result.txt")
+        write_tsv(self.result, "SpecHLA v1.0.12\n")
+        self.freqs = []
+        for gene in ("A", "B", "C", "DPA1", "DPB1", "DQA1", "DQB1", "DRB1"):
+            f = os.path.join(tmp, f"HLA_{gene}_freq.txt")
+            write_tsv(f, self.FREQ_SAMPLE)
+            self.freqs.append(f)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def run_driver(self, outdir, out, extra_env=None):
+        env = dict(os.environ)
+        env["PATH"] = self.bin_dir + os.pathsep + env["PATH"]
+        if extra_env:
+            env.update(extra_env)
+        return subprocess.run(
+            [sys.executable, os.path.join(REPO, "scripts", "hla_loh.py"),
+             "--pair", "Pt01", "--sample", "Pt01-TD",
+             "--result", self.result,
+             "--freq", *self.freqs,
+             "--purity-tsv", self.purity,
+             "--het-cutoff", "5",
+             "--outdir", outdir, "--out", out],
+            capture_output=True, text=True, env=env)
+
+    def test_loh_table_and_homogeneous_note(self):
+        outdir = os.path.join(self._tmp.name, "loh_work")
+        out = os.path.join(self._tmp.name, "loh.tsv")
+        proc = self.run_driver(outdir, out)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        with open(out) as fh:
+            rows = list(csv.DictReader(fh, delimiter="\t"))
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["pair"], "Pt01")
+        self.assertEqual(rows[0]["LOH"], "Y")
+        self.assertEqual(rows[1]["LOH"], "N")
+        # tool's own homogeneous tag -> note, never re-interpreted as LOH
+        self.assertEqual(rows[2]["LOH"], "N")
+        self.assertIn("homogeneous", rows[2]["note"])
+        self.assertIn("1/3", proc.stderr)
+        # purity/ploidy actually forwarded to spechla-loh
+        with open(os.path.join(outdir, "spechla-loh.args")) as fh:
+            args = fh.read().splitlines()
+        self.assertIn("0.720000", args)
+        self.assertIn("2.900000", args)
+
+    def test_missing_ascat_fit_fails_loud(self):
+        empty = os.path.join(self._tmp.name, "empty.tsv")
+        write_tsv(empty, "pair\tsample\tpurity\tploidy\n")
+        out = os.path.join(self._tmp.name, "loh.tsv")
+        proc = subprocess.run(
+            [sys.executable, os.path.join(REPO, "scripts", "hla_loh.py"),
+             "--pair", "Pt01", "--sample", "Pt01-TD",
+             "--result", self.result, "--freq", *self.freqs,
+             "--purity-tsv", empty, "--outdir", os.path.join(
+                 self._tmp.name, "w2"), "--out", out],
+            capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("REQUIRES purity and ploidy", proc.stderr)
+
+    def test_missing_freq_file_fails_loud(self):
+        os.remove(self.freqs[3])  # DPA1
+        out = os.path.join(self._tmp.name, "loh.tsv")
+        proc = self.run_driver(os.path.join(self._tmp.name, "w3"), out)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("missing freq file", proc.stderr)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

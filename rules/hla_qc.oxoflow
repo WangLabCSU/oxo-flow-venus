@@ -1,6 +1,6 @@
 [workflow]
 name = "venus-hla-qc"
-description = "RNA-side HLA typing (arcasHLA) and SpecHLA-vs-arcasHLA typing consistency QC (venus#31 P1 item 3)"
+description = "RNA-side HLA typing (arcasHLA), SpecHLA-vs-arcasHLA typing consistency QC, and HLA-LOH via spechla-loh (venus#31 P1 items 3+4)"
 
 # ---------------------------------------------------------------- context ---
 # DNA-side HLA typing is rules/neoantigen.oxoflow:hla_type_dna (SpecHLA,
@@ -98,6 +98,9 @@ output = ["hla_qc/{pair_id}.consistency.tsv"]
 threads = 2
 memory = "4G"
 environment = { pixi = "envs/report/pixi.toml" }
+# Detection-input result of an optional QC module; protect like the tcr
+# outputs so `clean` cannot silently delete it.
+protected_output = ["hla_qc/{pair_id}.consistency.tsv"]
 when = "config.run_hla_rna == 'true'"
 shell = """
 mkdir -p hla_qc logs && \
@@ -109,4 +112,62 @@ python {config.venus_tools}/hla_consistency.py \
     --patient {pair_id} \
     --out {output[0]} \
     2> logs/hla_qc_{pair_id}.log
+"""
+
+# ------------------------------------------------------------------ LOH ---
+# HLA-LOH calling (venus#31 P1 item 4). DASH (Shukla et al. 2015) is the
+# publication standard but has NO bioconda/pypi package (verified 2026-11 —
+# see docs/method-rationale.md) and therefore cannot meet the pixi lock-only
+# env policy. The honest in-lock alternative is SpecHLA's own `spechla-loh`
+# (cal.hla.copy.pl, shipped inside the EXISTING envs/hla env — verified from
+# the bioconda spechla 1.0.12 package, not from memory):
+#   - inputs: the 8 per-gene {sample}/HLA_<gene>_freq.txt files written by
+#     phase_variants.py during hla_type_dna and NOT deleted by
+#     clear_output.sh (verified), plus hla/{sample}/hla.result.txt;
+#   - purity/ploidy REQUIRED flags fed from the ASCAT fit
+#     (ascat/{pair_id}/purity_ploidy.tsv — the cal.hla.copy.pl usage text
+#     itself names ASCAT as the inference source; missing/failed ASCAT
+#     fails loudly in scripts/hla_loh.py, no silent defaults);
+#   - output merge.hla.copy.txt: per-allele copy ratios + LOH Y/N
+#     (LOH=Y iff allele copy ratios differ AND het SNPs >= -C, default 5).
+# Purity/ploidy come from the ASCAT fit, so this rule is paired-cohort only
+# (when = control != '') and additionally gated by run_hla_loh (opt-in, same
+# string-flag convention as run_tcr/run_hla_rna) because spechla-loh is NOT
+# auto-invoked by SpecHLA and its LOH calls on tumor-only organoid DNA carry
+# the same purity/ploidy uncertainty as the typing itself.
+[[rules]]
+name = "hla_loh"
+description = "HLA-LOH via spechla-loh (SpecHLA built-in) with ASCAT purity/ploidy"
+input = [
+    "hla/{experiment}/hla.result.txt",
+    "hla/{experiment}/HLA_A_freq.txt",
+    "hla/{experiment}/HLA_B_freq.txt",
+    "hla/{experiment}/HLA_C_freq.txt",
+    "hla/{experiment}/HLA_DPA1_freq.txt",
+    "hla/{experiment}/HLA_DPB1_freq.txt",
+    "hla/{experiment}/HLA_DQA1_freq.txt",
+    "hla/{experiment}/HLA_DQB1_freq.txt",
+    "hla/{experiment}/HLA_DRB1_freq.txt",
+    "ascat/{pair_id}/purity_ploidy.tsv",
+    "{config.venus_tools}/hla_loh.py",
+]
+output = ["hla_loh/{pair_id}.loh.tsv"]
+protected_output = ["hla_loh/{pair_id}.loh.tsv"]
+log = "logs/hla_loh_{pair_id}.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/hla/pixi.toml" }
+when = "config.run_hla_loh == 'true' && wildcard.control != ''"
+shell = """
+mkdir -p hla_loh/{pair_id} logs && \
+python {config.venus_tools}/hla_loh.py \
+    --pair {pair_id} \
+    --sample {experiment} \
+    --result {input[0]} \
+    --freq {input[1]} {input[2]} {input[3]} {input[4]} {input[5]} {input[6]} {input[7]} {input[8]} \
+    --purity-tsv {input[9]} \
+    --het-cutoff {config.hla_loh_het_cutoff} \
+    --outdir hla_loh/{pair_id} \
+    --out {output[0]} \
+    2> {log}
 """

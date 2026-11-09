@@ -203,6 +203,16 @@ trust_imgt_fa = "/home/data/reference/trust4/human_IMGT+C.fa"
 # and hla_qc/{pair_id}.consistency.tsv per WGS pair.
 run_hla_rna = "false"
 
+# HLA-LOH (venus#31 P1 item 4, hla_loh): spechla-loh (SpecHLA 1.0.12's
+# built-in cal.hla.copy.pl — DASH is not packaged on bioconda/pypi, disclosed
+# in the method rationale) with purity/ploidy from the ASCAT fit. "false"
+# (default): opt-in — spechla-loh is not auto-invoked by SpecHLA and its
+# copy-ratio inference inherits tumor-purity uncertainty. "true" + a paired
+# cohort instantiates hla_loh/{pair_id}.loh.tsv per WGS pair. -C het-SNP
+# cutoff stays at the tool default 5 (hla_loh_het_cutoff).
+run_hla_loh = "false"
+hla_loh_het_cutoff = 5
+
 # Pipeline helpers
 venus_tools = "scripts"
 
