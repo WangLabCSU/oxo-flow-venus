@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
+- neoantigen module P1 (venus#31): pVACfuse fusion-neoantigen prediction
+  (paired Manta PASS + tumor-only candidateSV complementary twins,
+  `scripts/manta_to_arriba.py`); TRUST4 TCRβ clonotypes from bulk RNA
+  (`run_tcr`, envs/tcr); arcasHLA RNA-side HLA typing + DNA/RNA
+  cross-check (`run_hla_rna`, envs/arcas, rules/hla_qc.oxoflow);
+  spechla-loh HLA-LOH with ASCAT purity/ploidy (`run_hla_loh`; DASH not
+  packaged — honest substitution documented in docs/method-rationale.md);
+  optional scRNA corroboration columns in the neoantigen report
+  (`run_scrna_corr`, reuses envs/scrna — no new lock gap); pVACview review
+  deployment docs (README; operator-side R stack disclosed); MSI-H
+  frameshift-neoantigen join page (uses report/msi_cohort.tsv MSI status
+  with WGS 3.5% / WES 15% cutoffs)
 - neoantigen module P0 (venus#31): SpecHLA typing, VEP plugin re-annotation
   (Wildtype/Frameshift), pVACseq MHCflurry prediction, burden report with
   expression filter and honest tumor-only/class-II disclosures
