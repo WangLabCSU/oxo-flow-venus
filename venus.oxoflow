@@ -183,6 +183,16 @@ vep_plugins_dir = "/home/data/reference/vep_plugins"
 # VEP cannot read — the two are separate deployments of the same release.
 vep_perl_cache = "/home/data/reference/vep_cache_perl"
 
+# TCR repertoire (venus#31 P1 item 2): TRUST4 from the bulk-RNA BAM.
+# "false" (default) = not a hard dependency — most venus cohorts are
+# tumor-only organoids where bulk-RNA TCR adds little and sensitivity is
+# depth-dependent. "true" instantiates tcr/{sample}.tcrb.clonotypes.tsv per
+# bulk-RNA sample. Requires trust_bcrtcr_fa + trust_imgt_fa built once via
+# scripts/prepare_trust4_ref.sh (venus.oxoflow: trust_ref_dir usage).
+run_tcr = "false"
+trust_bcrtcr_fa = "/home/data/reference/trust4/bcrtcr.fa"
+trust_imgt_fa = "/home/data/reference/trust4/human_IMGT+C.fa"
+
 # Pipeline helpers
 venus_tools = "scripts"
 
@@ -264,6 +274,9 @@ path = "rules/signature.oxoflow"
 
 [[include]]
 path = "rules/rna.oxoflow"
+
+[[include]]
+path = "rules/tcr.oxoflow"
 
 [[include]]
 path = "rules/scrna.oxoflow"

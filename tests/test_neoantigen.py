@@ -24,6 +24,7 @@ import hla_parse  # noqa: E402
 import manta_to_arriba as mta  # noqa: E402
 import neoantigen_report as nr  # noqa: E402
 import pvac_alleles  # noqa: E402
+import tcr_report  # noqa: E402
 
 SPEC_RESULT = (
     "SpecHLA v1.0.12\n"
@@ -290,6 +291,91 @@ class CollectNeoantigenTest(unittest.TestCase):
             self.assertEqual(by_b["burden_highaff_100nM"], "161")
             # deterministic sample order (sorted by input path)
             self.assertEqual([by_a["sample"], by_b["sample"]], ["GC01", "GC02"])
+
+
+class TcrReportTest(unittest.TestCase):
+    """venus#31 P1 item 2: TRUST4 report.tsv -> TCRbeta clonotype TSV.
+
+    Fixture mirrors trust-simplerep.pl output (packaged trust4 1.1.10):
+    header `#count frequency CDR3nt CDR3aa V D J C cid cid_full_length`,
+    counts as integers, frequency in %e scientific notation, absent genes
+    rendered as ".".
+    """
+
+    REPORT = (
+        "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\t"
+        "cid_full_length\n"
+        # productive TRB clonotype, full-length assembly (24 nt = 8 aa)
+        "42\t1.000000e+00\tTGTGCCAGCAGTCTGGGAGAATGG\tCASSLGEW\t"
+        "TRBV5-1\t.\tTRBJ2-1\tTRBC1\tasm1\t1\n"
+        # non-productive: out_of_frame rendering
+        "12\t2.857143e-01\tTGTGCCAGCAGTCTG\tout_of_frame\tTRBV12-3\t.\t"
+        "TRBJ1-1\tTRBC2\tasm2\t1\n"
+        # TRA clonotype (alpha, not beta) -> filtered out
+        "100\t6.800000e-01\tGCCTGAGGAC\tCAASSTGNQFYF\tTRAJ45\t.\t"
+        "TRAC\t.\tasm3\t1\n"
+        # stop codon in aa
+        "7\t1.666667e-01\tTGTGGCCCTTTG\tC*G_L\tTRBV20-1\t.\tTRBJ2-7\t"
+        "TRBC2\tasm4\t0\n"
+    )
+
+    def run_cli(self, tmp, report_text):
+        rep = os.path.join(tmp, "trust_report.tsv")
+        write_tsv(rep, report_text)
+        out = os.path.join(tmp, "clonotypes.tsv")
+        proc = subprocess.run(
+            [sys.executable, os.path.join(REPO, "scripts", "tcr_report.py"),
+             "--report", rep, "--sample", "S1", "--out", out],
+            capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        with open(out) as fh:
+            return list(csv.DictReader(fh, delimiter="\t")), proc.stderr
+
+    def test_trb_filter_ranking_and_annotations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, err = self.run_cli(tmp, self.REPORT)
+            self.assertEqual(len(rows), 3)
+            # ranked by descending count
+            self.assertEqual([r["clonotype_rank"] for r in rows],
+                             ["1", "2", "3"])
+            self.assertEqual([r["count"] for r in rows], ["42", "12", "7"])
+            top = rows[0]
+            self.assertEqual(top["sample"], "S1")
+            self.assertEqual(top["v_gene"], "TRBV5-1")
+            self.assertEqual(top["c_gene"], "TRBC1")
+            self.assertEqual(top["productive"], "yes")
+            self.assertEqual(top["full_length"], "yes")
+            of = rows[1]
+            self.assertEqual(of["productive"], "no")
+            self.assertEqual(of["cdr3_aa"], "out_of_frame")
+            stop = rows[2]
+            self.assertEqual(stop["productive"], "no")
+            # honest stderr note about filtering is allowed but not the
+            # no-clonotype warning
+            self.assertNotIn("WARNING no TCRbeta", err)
+            # no TRA gene leaked in
+            self.assertFalse(any("TRA" in r["v_gene"] for r in rows))
+
+    def test_empty_trb_writes_header_only(self):
+        bcell = (
+            "#count\tfrequency\tCDR3nt\tCDR3aa\tV\tD\tJ\tC\tcid\t"
+            "cid_full_length\n"
+            "99\t1.000000e+00\tATGGAGCTG\tMIYSGI\tIGHV1-2\t.\tIGHJ4\t"
+            "IGHM\tasm9\t1\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, err = self.run_cli(tmp, bcell)
+            self.assertEqual(rows, [])
+            self.assertIn("WARNING no TCRbeta clonotypes", err)
+            out = os.path.join(tmp, "clonotypes.tsv")
+            with open(out) as fh:
+                lines = fh.read().splitlines()
+            self.assertEqual(lines[0].split("\t"), tcr_report.HEADER)
+            self.assertEqual(len(lines), 1)
+
+    def test_bad_header_fails_loud(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(AssertionError):
+                self.run_cli(tmp, "count\tfreq\n1\t1e0\n")
 
 
 class MantaToArribaTest(unittest.TestCase):

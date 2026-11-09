@@ -1,0 +1,65 @@
+[workflow]
+name = "venus-tcr"
+description = "TCR repertoire from bulk RNA-seq via TRUST4 (venus#31 P1 item 2)"
+
+# TRUST4 assembles TCR/BCR CDR3 contigs directly from the STAR bulk-RNA BAM
+# (unselected RNA-seq; Song et al., Nat Methods 2021). TRUST4 was chosen over
+# MiXCR because it is de novo (no template leeching of the highly divergent
+# CDR3), bioconda-packaged with zero conda deps (static binaries; only the
+# run-trust4 wrapper needs perl), and publishes its per-clonotype report
+# format (trust-simplerep) that scripts/tcr_report.py filters to TCRbeta.
+#
+# NOT a hard dependency: the whole module is gated off by config.run_tcr
+# (default "false") because (a) most venus cohorts are tumor-only organoids
+# where TCR reconstruction from bulk RNA adds little, and (b) bulk-RNA TCR
+# sensitivity depends on library depth/composition. Turn on with
+# `oxo-flow run --arg run_tcr=true`.
+#
+# References (declared as config inputs; built by
+# scripts/prepare_trust4_ref.sh from OUR genome + GTF):
+#   trust_bcrtcr_fa  = the -f file: V/D/J/C gene sequences WITH genomic
+#                      coordinates (bam-extractor matches by coordinate).
+#                      Built from {config.genome_fa} + {config.gencode_gtf}
+#                      with the trust4 package's BuildDatabaseFa.pl — the
+#                      repo-shipped hg38_bcrtcr.fa is Gencode v35, stale vs
+#                      our GENCODE v47 build.
+#   trust_imgt_fa    = the --ref file (IMGT+C.fa, gene sequences + IMGT
+#                      alignment annotations), downloaded from the TRUST4
+#                      repo by the prepare script.
+[[rules]]
+name = "tcr_from_rna"
+description = "TRUST4 TCRbeta clonotype assembly from bulk RNA BAM"
+when = "config.run_tcr == 'true' && wildcard.assay == 'rnaseq'"
+input = [
+    "rna/star/{sample}/{sample}.Aligned.sortedByCoord.out.bam",
+    "{config.trust_bcrtcr_fa}",
+    "{config.trust_imgt_fa}",
+    "{config.venus_tools}/tcr_report.py",
+]
+output = [
+    "tcr/{sample}.tcrb.clonotypes.tsv",
+    "tcr/{sample}/trust_report.tsv",
+]
+protected_output = [
+    "tcr/{sample}.tcrb.clonotypes.tsv",
+    "tcr/{sample}/trust_report.tsv",
+]
+log = "logs/tcr_from_rna/{sample}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/tcr/pixi.toml" }
+shell = """
+# fresh-dir guard: run-trust4 appends to its {output_prefix}_* files
+rm -rf tcr/{sample} && \
+mkdir -p tcr/{sample} logs/tcr_from_rna && \
+run-trust4 -b {input[0]} \
+    -f {input[1]} \
+    --ref {input[2]} \
+    -o tcr/{sample}/trust \
+    -t {threads} \
+    --repseq \
+    >> {log} 2>&1 && \
+mv tcr/{sample}/trust_report.tsv {output[1]} && \
+python {input[3]} --report {output[1]} --sample {sample} --out {output[0]} \
+    2>> {log}
+"""

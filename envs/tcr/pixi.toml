@@ -1,0 +1,16 @@
+# Venus TCR repertoire environment (venus#31 P1 item 2, tcr_from_rna) —
+# TRUST4 assembles TCR/BCR CDR3 contigs from the bulk-RNA BAM (or FASTQs) and
+# annotates them against the IMGT reference; the rule post-processes
+# trust_cdr3.out into a TCRbeta clonotype table.
+# Referenced by rules/tcr.oxoflow via `environment = { pixi = "envs/tcr/pixi.toml" }`.
+[workspace]
+name = "venus-tcr"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+# TRUST4 1.1.10 (bioconda latest, 2026-11; verified via anaconda.org API:
+# linux-64 build h5814d7d_0, zero conda deps — the binaries are static).
+# run-trust4 is a Perl wrapper: perl ships from conda-forge.
+trust4 = "==1.1.10"
+perl = ">=5.32"
