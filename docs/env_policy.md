@@ -31,9 +31,13 @@ Policy: **strict by default, loud degradation, human arbitration**.
      "environment reproducibility: degraded" in the report methods section;
    - arbitration (commit the new lock as the new gold standard or revert) is
      a human decision.
-3. Engine-side graceful fallback is proposed upstream (Traitome/oxo-flow);
-   until it lands, the fallback procedure above is manual and MUST be
-   recorded in the workdir notes when exercised.
+3. Engine-side graceful fallback has landed upstream (Traitome/oxo-flow
+   #1011, released in v0.29.0; production now runs v0.30.0): when the lock
+   cannot be satisfied, the engine itself falls back to a fresh solve and
+   records the degradation, instead of failing the run. The human-arbitration
+   procedure above still applies to the lock files afterwards: exercise of
+   the fallback MUST be recorded in the workdir notes, and committing the
+   new lock as gold standard (or reverting) remains a human decision.
 
 ## Adding or changing an environment
 
