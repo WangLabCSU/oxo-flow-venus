@@ -1,0 +1,24 @@
+# Venus arcasHLA environment — HLA typing from bulk RNA (venus#31 P1 item 3,
+# hla_dna_rna_qc). arcas-hla is noarch; the bioconda build hdfd78af_2 of
+# 0.6.0 was verified package-by-package before pinning: declared deps =
+# bedtools, biopython, coreutils, git, git-lfs, kallisto 0.44, numpy, pandas,
+# pigz, pip, pyarrow, pytest, python, samtools, scipy — all pulled
+# automatically by the solver (kallisto/samtools/bedtools/pigz are the actual
+# compute deps of extract/genotype; git+git-lfs are only needed for the
+# one-time IMGT reference build, see scripts/prepare_arcas_ref.sh).
+#
+# Lock-gap declaration: envs/arcas/pixi.lock does NOT exist in this repo —
+# pixi.lock files are generated on the deployment server (no pixi in the dev
+# container). Run `pixi lock` inside envs/arcas on lab-wsx-in before the
+# first run.
+[workspace]
+name = "venus-arcas"
+description = "arcasHLA RNA HLA typing for venus neoantigen module (venus#31 P1 item 3)"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Exact pin: arcasHLA's dat/ layout (relative-path dat/ref/hla.p.json etc.)
+# and its genotype.json schema are only guaranteed within a release line;
+# 0.6.0 is the last bioconda release (2023) and the one smoke-verified here.
+arcas-hla = "==0.6.0"

@@ -198,6 +198,25 @@ chr-scattered pattern.
 | `gene_symbol_map` ×1 | `ref/gene_symbols.tsv` | (undeclared-class) | GTF-derived gene_id→symbol cache |
 | `pvacseq_run` ×pairs | `neoantigen/{pair_id}/filtered.tsv`, `alleles.txt` | (undeclared-class) | `run/` dir (MHC_Class_I predictions) is D-class scratch |
 | `neoantigen_report` ×pairs | `neoantigen/{pair_id}.{candidates.tsv,summary.tsv,report.md}` | (undeclared-class) | per-patient burden deliverables |
+| `pvacfuse_run_paired` ×pairs | `neoantigen/{pair_id}/{fuse.filtered.tsv,fuse.alleles.txt}` | (undeclared-class) | pVACfuse on Manta PASS SV via `manta_to_arriba.py`; `fuse_run/` scratch is D-class |
+| `pvacfuse_run_tumoronly` ×pairs | `neoantigen/{pair_id}/{fuse.candidate.filtered.tsv,fuse.alleles.txt}` | (undeclared-class) | complementary when-gate twin on candidateSV — distinct filename so unscored calls are never confused with PASS-scored ones |
+| `scrna_corroboration` ×pairs | `scrna_corr/{pair_id}.tsv` (protected) | (undeclared-class) | opt-in `run_scrna_corr`; per-gene %positive from the pair's filter_feature.h5ad (no malignant annotation — caveat in report text) |
+| `neoantigen_report_scrna` ×pairs | (same 3 paths as `neoantigen_report`) | (undeclared-class) | complementary when-gate twin adding `--scrna-corr`; exactly one of the two runs per pair |
+| `msi_frameshift_page` ×1 | `report/msi_frameshift_cohort.{tsv,md}` | (undeclared-class) | MSI-H × frameshift join page; every missing cell is the explicit sentinel `not_available` (see `scripts/msi_frameshift_join.py`) |
+
+### HLA QC (`rules/hla_qc.oxoflow`, venus#31 P1 items 3+4)
+
+| Rule (×n) | Output | Class | Notes |
+|---|---|---|---|
+| `hla_type_rna` ×RNA-samples | `hla_rna/{sample}/{sample}.genotype.json` + `logs/{extract,genotype}.log` | (undeclared-class) | opt-in `run_hla_rna`; arcasHLA extract+genotype from the STAR BAM |
+| `hla_dna_rna_qc` ×pairs | `hla_qc/{pair_id}.consistency.tsv` (protected) | (undeclared-class) | SpecHLA-vs-arcasHLA 2-field consistency; fires only for pairs with both layers (expand_inputs self-gating) |
+| `hla_loh` ×pairs | `hla_loh/{pair_id}.loh.tsv` (protected) | (undeclared-class) | opt-in `run_hla_loh` + paired-only; spechla-loh with ASCAT purity/ploidy (DASH has no bioconda/PyPI package — see docs/method-rationale.md) |
+
+### TCR (`rules/tcr.oxoflow`, venus#31 P1 item 2)
+
+| Rule (×n) | Output | Class | Notes |
+|---|---|---|---|
+| `tcr_from_rna` ×RNA-samples | `tcr/{sample}.tcrb.clonotypes.tsv` + `tcr/{sample}/trust_report.tsv` (both protected) | (undeclared-class) | opt-in `run_tcr`; TRUST4 on the STAR BAM, TCRbeta-clonotype filtered by `tcr_report.py` |
 
 ### Reports & cohort tables (`rules/report.oxoflow`)
 
@@ -264,11 +283,12 @@ convention the evidence/biomarker/therapy tables are declared
 ## Coverage statement
 
 The census tables above were generated when the repo had 13 rule files
-(40 rules); the manifest now holds **16 `rules/*.oxoflow` files (59 rules)**
-after the ecDNA/clinical/neoantigen additions — those module tables are
-included above, but the 561-instance / 1,553-file cohort census predates them
-and counts only the rules that existed in the reference `processed-wsx` run
+(40 rules); the manifest now holds **18 `rules/*.oxoflow` files (76 rules)**
+after the ecDNA/clinical/neoantigen/hla_qc/tcr additions — those module tables
+are included above, but the 561-instance / 1,553-file cohort census predates
+them and counts only the rules that existed in the reference `processed-wsx` run
 (`2026-10` ground truth). The per-instance counts for the newer modules depend
-on cohort mode (neoantigen rules instantiate only with `tumor_only=true`).
+on cohort mode (neoantigen rules instantiate only with `tumor_only=true`;
+tcr/hla_qc rules are opt-in via `run_tcr`/`run_hla_rna`/`run_hla_loh`).
 If a rule is added, regenerate the census with the snippet at the top
 and extend the matching module table.

@@ -183,6 +183,49 @@ vep_plugins_dir = "/home/data/reference/vep_plugins"
 # VEP cannot read — the two are separate deployments of the same release.
 vep_perl_cache = "/home/data/reference/vep_cache_perl"
 
+# TCR repertoire (venus#31 P1 item 2): TRUST4 from the bulk-RNA BAM.
+# "false" (default) = not a hard dependency — most venus cohorts are
+# tumor-only organoids where bulk-RNA TCR adds little and sensitivity is
+# depth-dependent. "true" instantiates tcr/{sample}.tcrb.clonotypes.tsv per
+# bulk-RNA sample. Requires trust_bcrtcr_fa + trust_imgt_fa built once via
+# scripts/prepare_trust4_ref.sh (venus.oxoflow: trust_ref_dir usage).
+run_tcr = "false"
+trust_bcrtcr_fa = "/home/data/reference/trust4/bcrtcr.fa"
+trust_imgt_fa = "/home/data/reference/trust4/human_IMGT+C.fa"
+
+# RNA-side HLA typing (venus#31 P1 item 3, hla_dna_rna_qc): arcasHLA from the
+# bulk-RNA BAM, cross-checked against the SpecHLA DNA typing per gene
+# (hla_qc/{pair_id}.consistency.tsv). "false" (default) = not a hard
+# dependency — same rationale as run_tcr: opt-in bulk-RNA module whose
+# reference bring-up is a per-machine ops step (arcasHLA builds dat/ INSIDE
+# its env prefix; run scripts/prepare_arcas_ref.sh once after pixi install of
+# envs/arcas). "true" instantiates hla_rna/{sample}/... per bulk-RNA sample
+# and hla_qc/{pair_id}.consistency.tsv per WGS pair.
+run_hla_rna = "false"
+
+# HLA-LOH (venus#31 P1 item 4, hla_loh): spechla-loh (SpecHLA 1.0.12's
+# built-in cal.hla.copy.pl — DASH is not packaged on bioconda/pypi, disclosed
+# in the method rationale) with purity/ploidy from the ASCAT fit. "false"
+# (default): opt-in — spechla-loh is not auto-invoked by SpecHLA and its
+# copy-ratio inference inherits tumor-purity uncertainty. "true" + a paired
+# cohort instantiates hla_loh/{pair_id}.loh.tsv per WGS pair. -C het-SNP
+# cutoff stays at the tool default 5 (hla_loh_het_cutoff).
+run_hla_loh = "false"
+hla_loh_het_cutoff = 5
+
+# scRNA corroboration of neoantigen candidates (venus#31 P1 item 5,
+# scrna_corroboration + neoantigen_report_scrna): %positive of each candidate
+# gene in the pair's OWN scrna/count/{pair_id}/outs/filter_feature.h5ad,
+# merged into the per-patient neoantigen report as scrna_* columns.
+# "false" (default): opt-in — (a) the h5ad only exists for cohorts that ran
+# the scrna module; (b) the corroboration runs in envs/scrna (the only env
+# with h5py — reused, so NO new env and NO new lock gap). HONEST CAVEAT:
+# dnbc4tools' h5ad carries NO malignant-cell annotation, so %positive is
+# over ALL filtered cells of the sample — a coarse "is the mutated gene
+# expressed at all" signal, never tumor-cell expression prevalence; the
+# caveat travels with the data (report summary detail + markdown).
+run_scrna_corr = "false"
+
 # Pipeline helpers
 venus_tools = "scripts"
 
@@ -266,6 +309,9 @@ path = "rules/signature.oxoflow"
 path = "rules/rna.oxoflow"
 
 [[include]]
+path = "rules/tcr.oxoflow"
+
+[[include]]
 path = "rules/scrna.oxoflow"
 
 [[include]]
@@ -276,6 +322,9 @@ path = "rules/clinical.oxoflow"
 
 [[include]]
 path = "rules/neoantigen.oxoflow"
+
+[[include]]
+path = "rules/hla_qc.oxoflow"
 
 [[include]]
 path = "rules/report.oxoflow"

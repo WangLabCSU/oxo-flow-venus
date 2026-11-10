@@ -20,6 +20,7 @@
 | Signatures | in-house SBS96 counter + NNLS vs COSMIC v3.1 | `report/signatures/{pair}.sbs96.counts.tsv`, `report/signatures/{pair}.exposures.tsv` |
 | Bulk RNA | 2-pass STAR, featureCounts | BAM, gene-count matrix, alignment metrics, fusion screening candidates |
 | Single-cell | dnbc4tools (`--chemistry {config.scrna_chemistry}`); QC summaries in dependency-light Python | count matrix, QC/clustering metrics |
+| Neoantigen | SpecHLA (DNA HLA typing) → VEP+Wildtype/Frameshift plugins → pVACseq/pVACfuse (MHCflurry) | `neoantigen/{pair}.candidates.tsv` + `.summary.tsv` + `.report.md`, optional pVACview review app |
 | Report | venus helper scripts | cohort TSV, TMB, clinical report with methods generated from what actually ran |
 
 Analysis modes:
@@ -240,6 +241,52 @@ manifests and checkpoint fingerprints to **workdir-resolved paths**, so:
   split before anything runs (the `Summary: N rules` line, by contrast,
   counts total graph instances, not stale ones).
 
+### Reviewing candidates in pVACview (neoantigen module)
+
+pVACseq writes its full prediction run under
+`neoantigen/{pair_id}/run/` (a D-class scratch directory — see
+[docs/artifacts.md](docs/artifacts.md); it is regenerable, but **pVACview
+needs it**, so do not delete it if you plan interactive review).
+[pVACview](https://pvactools.readthedocs.io/en/latest/pvacview.html) — the
+pVACtools review Shiny app — ships inside `envs/pvac` (it is a `pvactools`
+entry point, same env as `pvacseq`):
+
+```bash
+# from the run workdir, with envs/pvac materialized:
+pixi run -e envs/pvac -- pvacview run neoantigen/{pair_id}/run/MHC_Class_I/
+# --r_path (default "R") and --port (default 3333) are its only other options
+```
+
+The app serves on `0.0.0.0:3333` (hardcoded `shiny.host`/default `--port`;
+`--port` overrides the in-app default). Upload the run dir's
+`MHC_Class_I/all_epitopes.aggregated.tsv` as input 1 (Class I toggle) **and**
+its `.aggregated.metrics.json` as input 2 — the metrics file is **required**,
+not optional (the app hangs with empty threshold/VAF panels without it); an
+additional Class II aggregate TSV and a gene-of-interest TSV are optional.
+Verified against the pvactools 7.1.1 wheel and cross-checked file-by-file
+against the 7.1.5 tag (the versions differ only in transcript-annotation
+internals; CLI, inputs, and R stack are identical).
+
+Honest deployment caveats (why pVACview is not a locked venus env):
+
+- **R bring-up is operator-side.** `envs/pvac` is Python-only (pvactools,
+  MHCflurry, tensorflow). pVACview is an R Shiny app: it execs
+  `R -e "shiny::runApp(...)"` and `library()`s 21 CRAN packages
+  (colourpicker, curl, data.table, dplyr, DT, fresh, ggplot2, jsonlite,
+  plotly, plyr, purrr, RCurl, reshape2, shiny, shinycssloaders,
+  shinydashboard, shinydashboardPlus, shinyWidgets, stringr, tibble, tidyr —
+  union of server.R/ui.R/neofox_ui.R/anchor_and_helper_functions.R).
+  Install R + these on the operator side; `--r_path` points at that R.
+  Upstream's Dockerfile additionally installs shinyjs/shinythemes/RMySQL/
+  ggbeeswarm, but nothing in 7.1.1/7.1.5 `library()`s them — the list above
+  is the true set.
+- **Network dependency at startup**: the app autoloads the cancer-census
+  hotspot gene list from `raw.githubusercontent.com` (griffithlab/pVACtools)
+  when the main table loads — air-gapped review hosts will hang or lose the
+  "Gene of Interest" flagging (the demo-data button fetches from GitHub too).
+- Review is a human pass over `neoantigen/{pair_id}/run/` products; nothing
+  the app does feeds back into the pipeline's deliverables.
+
 ## Cleaning intermediates
 
 Rule definitions carry two cleanup markers (see [docs/cleanup.md](docs/cleanup.md)):
@@ -322,6 +369,7 @@ no model was fit).
 - `qc/multiqc/multiqc_report.html`, `rna/qc/rna_qc_summary.tsv`, `report/scrna_metrics.tsv`
 - `qc/alignqc/wgs_alignqc_summary.tsv` — per-sample WGS mapping rate, duplicate rate, depth, ≥10x/20x fractions, insert-size median, sex check (screening-level; contamination explicitly not_assessed)
 - `report/fusion_screen_cohort.tsv` — RNA fusion screening candidates (panel hits first; screening-level, needs orthogonal confirmation)
+- `report/msi_frameshift_cohort.{tsv,md}` — MSI-H × frameshift-neoantigen cohort page; missing sides render the explicit `not_available` sentinel (tumor-only cohorts carry header-only MSI; see `docs/method-rationale.md`)
 
 ## License
 

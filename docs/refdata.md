@@ -286,6 +286,10 @@ checks), monthly refresh; rules then read the local snapshot offline.
 | pVACtools 7.1.5 | bioconda (`pvactools`) | BSD-3-Clause-Clear | `envs/pvac` (pixi) |
 | MHCflurry 2.x | bioconda (`mhcflurry`) | Apache-2.0 — models pre-fetched by `scripts/prepare_neoantigen_ref.sh` into `/home/data/reference/mhcflurry_data` | via `envs/pvac` |
 | NetMHCpan 4.1b / NetMHCIIpan | `services.healthtech.dtu.dk` | **DTU academic license — no redistribution, commercial use paid** | **excluded from P0**; operator may install manually into `/home/data/reference/dtu_mhc` (prepare script audits presence) |
+| TRUST4 1.1.10 | bioconda (`trust4`), repo liulab-dfci/TRUST4 | MIT (LICENSE.txt, verified via GitHub API) — redistributable | `envs/tcr` (pixi; **no pixi.lock yet — generate on the server**, see PR note) + `scripts/prepare_trust4_ref.sh` for `bcrtcr.fa` + `human_IMGT+C.fa` |
+| arcasHLA 0.6.0 | bioconda (`arcashla`), repo RabadanLab/arcasHLA (org Irrational1 is gone) | GPL-3.0 (verified via GitHub API) — redistributable | `envs/arcas` (pixi; **no pixi.lock yet — generate on the server**) + `scripts/prepare_arcas_ref.sh` (arcasHLA builds its `dat/` index inside the env prefix) |
+| spechla-loh | SpecHLA 1.0.12's built-in `cal.hla.copy.pl` | MIT (ships with SpecHLA) | via `envs/hla` — no new env. DASH is **not** packaged on bioconda/PyPI (checked 2026-11); the LOH rule uses spechla-loh instead, see `rules/hla_qc.oxoflow` + docs/method-rationale.md |
+| pVACview (pVACtools entry point) | ships in the `pvactools` wheel | BSD-3-Clause-Clear (same) | `envs/pvac` for the Python launcher — but it execs an **operator-side R Shiny stack** (21 CRAN packages; see README "Reviewing candidates in pVACview"): R bring-up stays outside the pixi lock policy by design |
 
 Data flow: `bqsr/{sample}.bqsr.bam` → SpecHLA (`hla/{sample}/`) → `hla_parse.py` →
 alleles TSV → `pvac_alleles.py` (∩ MHCflurry-supported) → `vep_reannotate_plugins`
@@ -304,6 +308,12 @@ read — the vep-rs JSON cache is not) and `vep_plugins_dir` (Wildtype.pm +
 Frameshift.pm copied from Ensembl/VEP_plugins at the matching VEP release tag).
 Build both from the same Ensembl release-113 tarball §5 names; `scripts/
 prepare_neoantigen_ref.sh` audits the plugin dir.
+
+P1 additions (venus#31): pVACfuse consumes the Manta SV deliverable converted
+to Arriba format (`scripts/manta_to_arriba.py`); TRUST4 (`run_tcr`) and
+arcasHLA (`run_hla_rna`) are opt-in bulk-RNA modules with reference bring-up
+scripts; spechla-loh (`run_hla_loh`) reuses `envs/hla`; pVACview review is
+operator-side R (README section "Reviewing candidates in pVACview").
 
 ---
 

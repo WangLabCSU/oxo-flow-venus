@@ -141,10 +141,18 @@ cp neoantigen/{pair_id}/run/MHC_Class_I/*.filtered.tsv {output[0]}
 # expression filter from the pair's RNA featureCounts. The RNA sample name
 # follows the venus cohort convention "{pair_id}-TR" (same key convention as
 # groups.tsv bulkRNA); cohorts deviating from it should extend this rule.
+#
+# Tumor-only gating (venus#31 P1 item 5): when the optional scRNA
+# corroboration is enabled (config.run_scrna_corr), the complementary twin
+# rule neoantigen_report_scrna below takes over this rule's three output
+# paths and passes the corroboration TSV as --scrna-corr (the engine has no
+# conditional inputs; the msi_cohort / msi_cohort_tumoronly
+# shared-output-path complementary-when-gate pattern). Exactly one of the
+# two rules runs per pair, so the outputs are never produced twice.
 [[rules]]
 name = "neoantigen_report"
 description = "Neoantigen burden + QC report (expression filter)"
-when = "config.tumor_only == 'true'"
+when = "config.tumor_only == 'true' && config.run_scrna_corr != 'true'"
 input = [
     "neoantigen/{pair_id}/filtered.tsv",
     "hla/{experiment}.alleles.tsv",
@@ -175,5 +183,250 @@ python {config.venus_tools}/neoantigen_report.py \
     --out-candidates {output[0]} \
     --out-summary {output[1]} \
     --out-md {output[2]} \
+    2> {log}
+"""
+
+# pVACfuse on the Manta SV deliverable (venus#31 P1 item 1). Manta's BND
+# records are converted to Arriba format by scripts/manta_to_arriba.py
+# (declared input, same scripts-as-inputs pattern as clinical.oxoflow), then
+# fed to pvacfuse (same envs/pvac as pvacseq: pvactools 7.1.5 + MHCflurry).
+# Complementary when-gates mirror sv.oxoflow: the PAIRED deliverable
+# (deliver/{pair_id}.sv.vcf.gz, PASS-only) for cohorts with normals, the
+# tumor-only candidateSV for tumor-only cohorts — exactly one of the two
+# rules can run per pair. Candidate SVs are explicitly UNSCORED calls: the
+# tumor-only fusion TSV is written to a distinct filename (...fuse.candidate
+# .filtered.tsv) so it is never confused with the PASS-scored one.
+# pvacfuse with zero processable fusions exits 0 WITHOUT writing a
+# filtered.tsv — the `||` fallback then writes an honest header-only TSV.
+[[rules]]
+name = "pvacfuse_run_paired"
+description = "pVACfuse MHC-I fusion neoantigen prediction from Manta SV (paired)"
+when = "config.tumor_only == 'true' && wildcard.control != ''"
+input = [
+    "deliver/{pair_id}.sv.vcf.gz",
+    "{config.gencode_gtf}",
+    "{config.genome_fa}",
+    "hla/{experiment}.alleles.tsv",
+    "{config.venus_tools}/manta_to_arriba.py",
+    "{config.venus_tools}/pvac_alleles.py",
+]
+output = [
+    "neoantigen/{pair_id}/fuse.filtered.tsv",
+    "neoantigen/{pair_id}/fuse.alleles.txt",
+]
+log = "logs/pvacfuse_{pair_id}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/pvac/pixi.toml" }
+shell = """
+mkdir -p neoantigen/{pair_id} logs && \
+rm -rf neoantigen/{pair_id}/fuse_run && \
+export MHCFLURRY_DATA_DIR={config.mhcflurry_data_dir} && \
+python {config.venus_tools}/manta_to_arriba.py \
+    --vcf {input[0]} \
+    --gencode {config.gencode_gtf} \
+    --genome-fa {config.genome_fa} \
+    --tumor-sample {experiment} \
+    --output neoantigen/{pair_id}/fuse.arriba.tsv \
+    2> {log} && \
+python {config.venus_tools}/pvac_alleles.py \
+    --alleles-tsv {input[3]} --min-alleles {config.neo_min_alleles} \
+    --out {output[1]} && \
+ALLELES=$(cat {output[1]}) && \
+pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
+    {config.neo_predictors} neoantigen/{pair_id}/fuse_run \
+    --binding-threshold {config.neo_binding_nm} \
+    --percentile-threshold-strategy exploratory \
+    --top-score-metric lowest \
+    --read-support 5 --expn-val 0.1 -d 1000 \
+    --n-threads {threads} \
+    >> {log} 2>&1 && \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
+    2>/dev/null || \
+printf 'fusion_id\tnote\\n\\tNo processable fusions from Manta SV (pvacfuse wrote no filtered.tsv)\\n' \
+    > {output[0]}
+"""
+
+# Tumor-only companion: candidateSV (explicitly UNSCORED calls — Manta marks
+# FILTER=.; not PASS) → distinct output filename for honesty.
+[[rules]]
+name = "pvacfuse_run_tumoronly"
+description = "pVACfuse MHC-I fusion neoantigen prediction from Manta candidateSV (tumor-only)"
+when = "config.tumor_only == 'true' && wildcard.control == ''"
+input = [
+    "deliver/{pair_id}.sv.candidate.vcf.gz",
+    "{config.gencode_gtf}",
+    "{config.genome_fa}",
+    "hla/{experiment}.alleles.tsv",
+    "{config.venus_tools}/manta_to_arriba.py",
+    "{config.venus_tools}/pvac_alleles.py",
+]
+output = [
+    "neoantigen/{pair_id}/fuse.candidate.filtered.tsv",
+    "neoantigen/{pair_id}/fuse.alleles.txt",
+]
+log = "logs/pvacfuse_{pair_id}.log"
+threads = 8
+memory = "32G"
+environment = { pixi = "envs/pvac/pixi.toml" }
+shell = """
+mkdir -p neoantigen/{pair_id} logs && \
+rm -rf neoantigen/{pair_id}/fuse_run && \
+export MHCFLURRY_DATA_DIR={config.mhcflurry_data_dir} && \
+python {config.venus_tools}/manta_to_arriba.py \
+    --vcf {input[0]} \
+    --gencode {config.gencode_gtf} \
+    --genome-fa {config.genome_fa} \
+    --tumor-sample {experiment} \
+    --output neoantigen/{pair_id}/fuse.arriba.tsv \
+    2> {log} && \
+python {config.venus_tools}/pvac_alleles.py \
+    --alleles-tsv {input[3]} --min-alleles {config.neo_min_alleles} \
+    --out {output[1]} && \
+ALLELES=$(cat {output[1]}) && \
+pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
+    {config.neo_predictors} neoantigen/{pair_id}/fuse_run \
+    --binding-threshold {config.neo_binding_nm} \
+    --percentile-threshold-strategy exploratory \
+    --top-score-metric lowest \
+    --read-support 5 --expn-val 0.1 -d 1000 \
+    --n-threads {threads} \
+    >> {log} 2>&1 && \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
+    2>/dev/null || \
+printf 'fusion_id\\tnote\\n\\tNo processable fusions from Manta candidateSV (pvacfuse wrote no filtered.tsv; candidate SVs are unscored calls)\\n' \
+    > {output[0]}
+"""
+
+# ---------------------------------------------------- scRNA corroboration ---
+# venus#31 P1 item 5: %positive of each candidate gene in the pair's OWN
+# single-cell profile, from scrna/count/{pair_id}/outs/filter_feature.h5ad
+# (dnbc4tools), optionally split per cluster via outs/analysis/cluster.csv.
+#
+# HONEST CAVEAT (also embedded in the report text by neoantigen_report.py):
+# the dnbc4tools h5ad has NO malignant-cell annotation, so %positive is over
+# ALL filtered cells of the sample — a low value can mean low tumor fraction,
+# not absent expression. The per-cluster breakdown is for eyeballing
+# concentration only; no cluster is labeled malignant here.
+#
+# Input choice: the gene list comes from neoantigen/{pair_id}/filtered.tsv
+# (pVACseq output), NOT from the report rule's candidates.tsv — consuming
+# this rule's own downstream output would create a circular dependency.
+#
+# Environment: envs/scrna is the ONLY venus env with h5py (envs/report and
+# envs/qc lack it); reusing it creates NO new env and NO new lock gap.
+# Opt-in via config.run_scrna_corr (venus.oxoflow) — the h5ad only exists
+# for cohorts that ran the scrna module, and envs/scrna computes the whole
+# scanpy stack regardless.
+[[rules]]
+name = "scrna_corroboration"
+description = "Per-gene %positive of neoantigen candidates in the pair's filter_feature.h5ad"
+when = "config.tumor_only == 'true' && config.run_scrna_corr == 'true'"
+input = [
+    "scrna/count/{pair_id}/outs/filter_feature.h5ad",
+    "neoantigen/{pair_id}/filtered.tsv",
+    "scrna/count/{pair_id}/outs/analysis/cluster.csv",
+    "{config.venus_tools}/scrna_corroboration.py",
+]
+output = ["scrna_corr/{pair_id}.tsv"]
+protected_output = ["scrna_corr/{pair_id}.tsv"]
+log = "logs/scrna_corr_{pair_id}.log"
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/scrna/pixi.toml" }
+shell = """
+mkdir -p scrna_corr logs && \
+python {config.venus_tools}/scrna_corroboration.py \
+    --h5ad {input[0]} \
+    --pvac-tsv {input[1]} \
+    --cluster {input[2]} \
+    --out {output[0]} \
+    2> {log}
+"""
+
+# Complementary twin of neoantigen_report (same three output paths,
+# complementary when-gates — msi_cohort / msi_cohort_tumoronly pattern): the
+# only difference is input[5], the corroboration TSV, passed as --scrna-corr.
+[[rules]]
+name = "neoantigen_report_scrna"
+description = "Neoantigen burden + QC report (expression filter + scRNA corroboration)"
+when = "config.tumor_only == 'true' && config.run_scrna_corr == 'true'"
+input = [
+    "neoantigen/{pair_id}/filtered.tsv",
+    "hla/{experiment}.alleles.tsv",
+    "neoantigen/{pair_id}/alleles.txt",
+    "rna/counts/{pair_id}-TR.featurecounts.txt",
+    "ref/gene_symbols.tsv",
+    "scrna_corr/{pair_id}.tsv",
+]
+output = [
+    "neoantigen/{pair_id}.candidates.tsv",
+    "neoantigen/{pair_id}.summary.tsv",
+    "neoantigen/{pair_id}.report.md",
+]
+log = "logs/neoantigen_report_{pair_id}.log"
+threads = 2
+memory = "8G"
+environment = { pixi = "envs/qc/pixi.toml" }
+shell = """
+python {config.venus_tools}/neoantigen_report.py \
+    --pvac-tsv {input[0]} \
+    --hla-tsv {input[1]} \
+    --usable-alleles {input[2]} \
+    --counts {input[3]} \
+    --gene-map {input[4]} \
+    --scrna-corr {input[5]} \
+    --patient {pair_id} \
+    --mode tumor_only \
+    --predictors '{config.neo_predictors}' \
+    --strong-nm {config.neo_binding_nm} \
+    --out-candidates {output[0]} \
+    --out-summary {output[1]} \
+    --out-md {output[2]} \
+    2> {log}
+"""
+
+# ------------------------------------------------- MSI-H x frameshift page ---
+# venus#31 P1 item 7: join the cohort-wide frameshift_neoantigens counts
+# (report/neoantigen_cohort.tsv, from collect_neoantigen.py) with the MSI
+# statuses (report/msi_cohort.tsv, from collect_msi.py: msi_status_wgs at
+# the 3.5% Niu 2014 WGS cutoff, msi_status_wes at the 15% WES convention)
+# into report/msi_frameshift_cohort.{tsv,md}.
+#
+# Why the neoantigen module owns this page: the join crosses module
+# deliverables, and the honest reading depends on cohort mode. In a
+# tumor-only cohort the MSI table is the header-only companion (MSI needs a
+# matched normal), so every MSI cell renders the explicit sentinel
+# "not_available" -- never a silent blank; in a paired cohort the neoantigen
+# side is the header-only one (the neoantigen module is tumor-only-gated,
+# venus#31). Both shapes are disclosed in the markdown page.
+#
+# Environment: envs/report (stdlib-only script) - same env as the report
+# module's collectors; no new env, no new lock gap.
+[[rules]]
+name = "msi_frameshift_page"
+description = "Cohort MSI-H x frameshift-neoantigen join table + markdown page"
+when = "config.tumor_only == 'true'"
+input = [
+    "report/neoantigen_cohort.tsv",
+    "report/msi_cohort.tsv",
+    "{config.venus_tools}/msi_frameshift_join.py",
+]
+output = [
+    "report/msi_frameshift_cohort.tsv",
+    "report/msi_frameshift_cohort.md",
+]
+log = "logs/msi_frameshift_page.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/msi_frameshift_join.py \
+    --neoantigen-cohort {input[0]} \
+    --msi-cohort {input[1]} \
+    --strong-nm {config.neo_binding_nm} \
+    --out-tsv {output[0]} \
+    --out-md {output[1]} \
     2> {log}
 """
