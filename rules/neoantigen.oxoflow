@@ -100,6 +100,11 @@ awk -F'\\t' '$0 !~ /^#/ && $3 == "gene" { \
 # filters disabled so burden is not silently VAF>=0.25-clipped — reporting
 # floors are applied downstream in neoantigen_report instead.
 # sample_name = {experiment} (must match the VCF #CHROM column, audit B3).
+# The final cp names the pVACtools 7.x report explicitly
+# (MHC_Class_I/{experiment}.MHC_I.filtered.tsv) instead of globbing
+# *.filtered.tsv (issue #33 N7): one class-I folder holds exactly one
+# filtered report, and an explicit path fails loudly if pVACtools ever
+# changes its output naming instead of silently copying an arbitrary match.
 [[rules]]
 name = "pvacseq_run"
 description = "pVACseq MHC-I neoantigen prediction (MHCflurry)"
@@ -134,7 +139,7 @@ pvacseq run {input[0]} {experiment} "$ALLELES" \
     --n-threads {threads} \
     $PURITY_ARG \
     > {log} 2>&1 && \
-cp neoantigen/{pair_id}/run/MHC_Class_I/*.filtered.tsv {output[0]}
+cp neoantigen/{pair_id}/run/MHC_Class_I/{experiment}.MHC_I.filtered.tsv {output[0]}
 """
 
 # Per-patient burden report: candidates TSV + long summary + markdown, with
@@ -198,6 +203,10 @@ python {config.venus_tools}/neoantigen_report.py \
 # .filtered.tsv) so it is never confused with the PASS-scored one.
 # pvacfuse with zero processable fusions exits 0 WITHOUT writing a
 # filtered.tsv — the `||` fallback then writes an honest header-only TSV.
+# The cp names the pVACtools 7.x report explicitly
+# (MHC_Class_I/{pair_id}.MHC_I.filtered.tsv) instead of globbing
+# *.filtered.tsv (issue #33 N7); the `||` fallback covers only the cp so a
+# converter/pvacfuse crash still fails the rule loudly (audit M1).
 [[rules]]
 name = "pvacfuse_run_paired"
 description = "pVACfuse MHC-I fusion neoantigen prediction from Manta SV (paired)"
@@ -241,14 +250,16 @@ pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
     --read-support 5 --expn-val 0.1 -d 1000 \
     --n-threads {threads} \
     >> {log} 2>&1 && \
-cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
-    2>/dev/null || \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/{pair_id}.MHC_I.filtered.tsv {output[0]} || \
 printf 'fusion_id\tnote\\n\\tNo processable fusions from Manta SV (pvacfuse wrote no filtered.tsv)\\n' \
     > {output[0]}
 """
 
 # Tumor-only companion: candidateSV (explicitly UNSCORED calls — Manta marks
 # FILTER=.; not PASS) → distinct output filename for honesty.
+# cp names the pVACtools 7.x report explicitly (issue #33 N7); the `||`
+# fallback covers only the cp so a converter/pvacfuse crash still fails the
+# rule loudly (audit M1).
 [[rules]]
 name = "pvacfuse_run_tumoronly"
 description = "pVACfuse MHC-I fusion neoantigen prediction from Manta candidateSV (tumor-only)"
@@ -292,8 +303,7 @@ pvacfuse run neoantigen/{pair_id}/fuse.arriba.tsv {pair_id} "$ALLELES" \
     --read-support 5 --expn-val 0.1 -d 1000 \
     --n-threads {threads} \
     >> {log} 2>&1 && \
-cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/*.filtered.tsv {output[0]} \
-    2>/dev/null || \
+cp neoantigen/{pair_id}/fuse_run/MHC_Class_I/{pair_id}.MHC_I.filtered.tsv {output[0]} || \
 printf 'fusion_id\\tnote\\n\\tNo processable fusions from Manta candidateSV (pvacfuse wrote no filtered.tsv; candidate SVs are unscored calls)\\n' \
     > {output[0]}
 """
