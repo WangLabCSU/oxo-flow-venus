@@ -302,10 +302,12 @@ oxo-flow run --arg target_bed=/data/exome.bed \
   --arg tmb_target_args="--target-bed /data/exome.bed" --arg msi_coverage=20
 ```
 
-Note: `run_bqsr=false` is NOT a runnable end-state yet — every downstream
-caller consumes `bqsr/{sample}/{sample}.bqsr.bam` and no companion rule
-publishes the un-recalibrated BAM under that path, so the flag would leave
-the whole somatic chain without a producer (see `venus.oxoflow`).
+Note: `run_bqsr=false` is supported via the companion rule `bqsr_passthrough`
+(rules/align.oxoflow), which publishes the un-recalibrated markdup BAM (and
+its index) under the same `bqsr/{sample}/` paths every downstream caller
+consumes — the somatic chain stays fully producible, just without
+recalibration (`{sample}.recal.table` then holds a placeholder noting that
+no model was fit).
 
 ## Outputs of note
 

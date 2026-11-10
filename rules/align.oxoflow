@@ -105,3 +105,59 @@ gatk --java-options "-Xmx{effective_memory_mb}m" ApplyBQSR \
     -O {output[1]} \
     2>> {log}
 """
+
+# No-BQSR twin of `bqsr` (issue #33 N1): publishes the un-recalibrated
+# markdup BAM under the SAME bqsr/ paths every downstream caller consumes
+# (Mutect2, Manta, ASCAT, CNVkit, MSIsensor, AmpliconSuite, SpecHLA), so
+# `run_bqsr=false` becomes a runnable end-state. The when-gates are exactly
+# complementary to `bqsr` (same string-flag convention; same twin shape as
+# the ascat_cohort / ascat_cohort_tumoronly pair), so exactly one of the two
+# rules is instantiated per WGS sample on any config.
+#
+# Index handling: mark_duplicates creates align/{sample}/{sample}.markdup.bai
+# as an UNDECLARED side product (picard --CREATE_INDEX, see docs/cleanup.md
+# "undeclared leftovers"), so it cannot be declared as rule input — instead
+# the shell copies it when present and otherwise builds the index with
+# samtools (htslib ships in envs/varcall/pixi.toml). samtools index writes
+# BAI by default, matching the .bqsr.bai name bqsr consumers expect.
+#
+# Storage decision — cp, not hardlink: mode-B cleanup (oxo-flow clean) and
+# the disk-pressure reclaim treat the markdup BAM as deletable scratch; a
+# hardlink would keep the ~40 GB/pair inode alive after that unlink, so the
+# "deleted" 2.7 TB-class scratch would silently stay on disk. cp duplicates
+# the markdup BAM cohort-wide (~100 GB for this cohort) but keeps cleanup
+# semantics honest: deleting align/ actually frees the space.
+[[rules]]
+name = "bqsr_passthrough"
+description = "Publish un-recalibrated markdup BAM under the bqsr/ paths (run_bqsr=false)"
+when = "config.run_bqsr == 'false' && wildcard.assay == 'wgs'"
+input = ["align/{sample}/{sample}.markdup.bam"]
+output = [
+    "bqsr/{sample}/{sample}.recal.table",
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+# Same standing as the bqsr twins: analysis-ready BAMs every caller consumes.
+# The recal.table is absent by definition here (no model was fit); write a
+# small placeholder so the declared output list of both twins matches — its
+# content records that BQSR was skipped, keeping the audit trail honest.
+protected_output = [
+    "bqsr/{sample}/{sample}.recal.table",
+    "bqsr/{sample}/{sample}.bqsr.bam",
+    "bqsr/{sample}/{sample}.bqsr.bai",
+]
+log = "logs/bqsr_passthrough/{sample}.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/varcall/pixi.toml" }
+shell = """
+mkdir -p bqsr/{sample} logs/bqsr_passthrough && \
+cp align/{sample}/{sample}.markdup.bam bqsr/{sample}/{sample}.bqsr.bam && \
+if [ -f align/{sample}/{sample}.markdup.bai ]; then \
+    cp align/{sample}/{sample}.markdup.bai bqsr/{sample}/{sample}.bqsr.bai; \
+  else \
+    samtools index bqsr/{sample}/{sample}.bqsr.bam; \
+  fi && \
+printf 'no-BQSR run (run_bqsr=false): markdup BAM published as-is under bqsr/, no recalibration model was fit\n' \
+    > bqsr/{sample}/{sample}.recal.table
+"""

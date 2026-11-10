@@ -198,12 +198,12 @@ chromosomes = [
 ]
 
 # Base-recalibration: "true"/"false" (string; tested with when = comparisons).
-# CAUTION: "false" is currently NOT a runnable end-state — every consumer
-# (Mutect2, Manta, CNVkit, ASCAT, MSIsensor, AmpliconSuite, SpecHLA) consumes
-# bqsr/{sample}/{sample}.bqsr.bam(+.bai), and there is no companion rule that
-# publishes the un-recalibrated markdup BAM under that path. Setting it to
-# "false" yields a DAG with no producer for the whole downstream chain. Keep
-# "true" until such a companion rule exists (20261103 audit).
+# "false" publishes the un-recalibrated markdup BAM under the same bqsr/
+# paths via the companion rule bqsr_passthrough (rules/align.oxoflow), so the
+# full downstream somatic chain stays producible without BQSR (issue #33 N1).
+# "true" runs the GATK BQSR chain as before. Note the swap invalidates the
+# affected rules' fingerprints (different producing rule behind identical
+# output paths) — the bqsr/{sample}/ products are re-created on next run.
 run_bqsr = "true"
 
 # Cohort mode flag for report gating: "true" = tumor-only cohort (no pair in

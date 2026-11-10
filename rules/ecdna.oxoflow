@@ -34,6 +34,14 @@ description = "ecDNA / focal amplification reconstruction with AmpliconSuite (CN
 #     the five classification TSVs to the declared output paths, and renames
 #     the flag to .suite_finished — a partially-failed run never satisfies
 #     the declared outputs.
+#   - rm -rf guard (same pattern as manta): the suite does NOT clean or skip
+#     an existing output directory — it logs "outputs directed into the same
+#     output location as a previous run may cause crashes or other unexpected
+#     behavior" (paalib/config_validator.py) and then reuses the stale
+#     CNVkit/AA/classification subdirs (each only `mkdir`d when absent), so a
+#     re-run would mix old and new stage artifacts. Wipe the pair directory
+#     first: declared outputs are protected, so the engine only re-runs this
+#     rule when they are genuinely absent/invalid — never on a clean resume.
 #
 # Extra levers (pass via config.ecdna_args):
 #   --normal_bam   matched-normal CNVkit reference for paired cohorts
@@ -71,7 +79,7 @@ threads = 16
 memory = "64G"
 environment = { pixi = "envs/amplicon/pixi.toml" }
 shell = """
-mkdir -p ecdna/{pair_id} logs && \
+rm -rf ecdna/{pair_id} && mkdir -p ecdna/{pair_id} logs && \
 export AA_DATA_REPO={config.aa_data_repo} && \
 export AS_NO_REPO_CHECK=1 && \
 AmpliconSuite-pipeline.py \
