@@ -1,4 +1,6 @@
 # Venus bulk RNA-seq environment — STAR alignment, featureCounts quantification.
+# Slimmed (issue #33 N6): fastp lives in envs/qc (the shared trim rule) and
+# no envs/rna rule invokes samtools — only STAR + featureCounts(subread).
 [workspace]
 name = "venus-rna"
 channels = ["conda-forge", "bioconda"]
@@ -6,6 +8,4 @@ platforms = ["linux-64"]
 
 [dependencies]
 star = ">=2.7.11b"
-samtools = ">=1.21"
-fastp = ">=0.24"
 subread = ">=2.0.6"
