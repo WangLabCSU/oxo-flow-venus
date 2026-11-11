@@ -11,4 +11,5 @@ pandas = ">=2"
 pysam = ">=0.22"
 bcftools = ">=1.21"
 htslib = ">=1.21"
-requests = ">=2.31"
+# requests removed (issue #33 N6): clinical_oncokb.py calls the OncoKB API
+# with urllib.request (stdlib), no requests import anywhere.

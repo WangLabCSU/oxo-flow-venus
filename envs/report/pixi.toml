@@ -1,4 +1,8 @@
-# Venus report environment — cohort report generation (Python).
+# Venus report environment — cohort report generation (Python stdlib).
+# Slimmed (issue #33 N6): every report-module script is stdlib-only
+# (argparse/csv/gzip/re/json/html/tomllib), so the env is a bare Python —
+# pandas, pysam, matplotlib, jinja2, pyyaml and openpyxl were all unused
+# (pandas/pysam consumers live in envs/clinical).
 [workspace]
 name = "venus-report"
 channels = ["conda-forge", "bioconda"]
@@ -6,9 +10,3 @@ platforms = ["linux-64"]
 
 [dependencies]
 python = "3.11.*"
-pandas = ">=2.2"
-pysam = ">=0.22"
-matplotlib = ">=3.8"
-jinja2 = ">=3.1"
-pyyaml = "*"
-openpyxl = "*"
