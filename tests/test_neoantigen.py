@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 
 import collect_neoantigen  # noqa: E402
 import hla_parse  # noqa: E402
+import icb_linkage as il  # noqa: E402
 import manta_to_arriba as mta  # noqa: E402
 import msi_frameshift_join as mfj  # noqa: E402
 import neoantigen_report as nr  # noqa: E402
@@ -980,6 +981,162 @@ class MsiFrameshiftJoinTest(unittest.TestCase):
                 "sample\tmsi_status_wgs\tmsi_status_wes\tbh_pct\n")
             self.assertEqual(rows, [])
             self.assertIn("no rows", md)
+
+
+class IcbLinkageTest(unittest.TestCase):
+    """venus#31: TMB x MSI x neoantigen burden cross-evidence page.
+
+    Covers the honesty-critical shapes: full join with both ICB flag
+    conventions (TMB-H FDA >=13 kept separate from 10-<13 legacy; MSI
+    wgs/wes side by side), patient-key normalization (-TD stripped),
+    header-only MSI (tumor-only) and header-only neoantigen (paired),
+    a cohort summary without the TMB column, and fully empty inputs.
+    """
+
+    COHORT = (
+        "sample\ttmb_sample_id\ttmb_tmb_mut_per_mb\ttmb_all_somatic_mut_per_mb\n"
+        "Pt01\tPt01-TD\t13.5\t20.1\n"
+        "Pt02\tPt02-TD\t11.2\t15.0\n"
+        "Pt03\tPt03-TD\t3.0\t4.5\n")
+    MSI = (
+        "sample\traw_total_sites\tsummary_total_sites\treported_unstable\t"
+        "reported_pct\tbh_unstable\tbh_pct\tunstable_delta\t"
+        "uint16_saturated\tmsi_status_wgs\tmsi_status_wes\n"
+        "Pt01-TD\t5000\t5000\t3\t0.06\t4\t0.08\t1\tfalse\tMSI-H\tMSS\n"
+        "Pt02-TD\t5000\t5000\t1\t0.02\t2\t0.04\t1\tfalse\tMSS\tMSS\n")
+    NEO = (
+        "sample\thla_alleles_typed\thla_alleles_predictor_usable\t"
+        "candidates_reported\tunique_candidates\tburden_strong_500nM\t"
+        "burden_highaff_100nM\texpr_tpm_pass\tframeshift_neoantigens\t"
+        "predictors\tpredictors_note\n"
+        "Pt01\t13\t6\t263\t261\t20\t139\t138\t2\tMHCflurry\tnote\n"
+        "Pt02\t14\t6\t200\t200\t10\t100\t125\t0\tMHCflurry\tnote\n")
+    MSI_HEADER_ONLY = (
+        "sample\traw_total_sites\tsummary_total_sites\treported_unstable\t"
+        "reported_pct\tbh_unstable\tbh_pct\tunstable_delta\t"
+        "uint16_saturated\tmsi_status_wgs\tmsi_status_wes\n")
+
+    def run_join(self, tmp, cohort_text, msi_text, neo_text, extra=()):
+        cohort = os.path.join(tmp, "cohort.tsv")
+        msi = os.path.join(tmp, "msi.tsv")
+        neo = os.path.join(tmp, "neo.tsv")
+        tsv = os.path.join(tmp, "icb.tsv")
+        md = os.path.join(tmp, "icb.md")
+        write_tsv(cohort, cohort_text)
+        write_tsv(msi, msi_text)
+        write_tsv(neo, neo_text)
+        rc = il.main_with_args(
+            ["--cohort-summary", cohort, "--msi-cohort", msi,
+             "--neoantigen-cohort", neo, "--out-tsv", tsv, "--out-md", md,
+             *extra])
+        assert rc == 0
+        with open(tsv) as fh:
+            rows = list(csv.DictReader(fh, delimiter="\t"))
+        with open(md) as fh:
+            md_text = fh.read()
+        return rows, md_text
+
+    def test_full_join_flags_and_patient_normalization(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp, self.COHORT, self.MSI, self.NEO)
+            self.assertEqual(
+                [r["sample"] for r in rows], ["Pt01", "Pt02", "Pt03"])
+            pt01 = rows[0]
+            self.assertEqual(pt01["tmb_coding_mut_per_mb"], "13.5")
+            self.assertEqual(pt01["tmb_status"],
+                             "TMB-H (FDA >=13 mut/Mb coding)")
+            self.assertEqual(pt01["msi_status_wgs"], "MSI-H")
+            self.assertEqual(pt01["msi_status_wes"], "MSS")
+            self.assertEqual(pt01["msi_bh_pct"], "0.08")
+            self.assertEqual(pt01["neo_burden_strong_500nM"], "20")
+            self.assertEqual(pt01["neo_frameshift_neoantigens"], "2")
+            self.assertEqual(pt01["note"], "")
+            pt02 = rows[1]
+            # 11.2 mut/Mb coding: legacy context wording, never a label
+            self.assertEqual(pt02["tmb_status"],
+                             "TMB 10-<13 (legacy high-TMB context, not FDA label)")
+            self.assertEqual(pt02["msi_status_wgs"], "MSS")
+            pt03 = rows[2]
+            self.assertEqual(pt03["tmb_status"], "not_high")
+            for f in ("msi_status_wgs", "neo_burden_strong_500nM"):
+                self.assertEqual(pt03[f], "not_available")
+            self.assertIn("msi_not_available", pt03["note"])
+            self.assertIn("neoantigen_not_available", pt03["note"])
+            # md: conventions + counts
+            self.assertIn(">= 13 mut/Mb coding", md)
+            self.assertIn("3.5%", md)
+            self.assertIn("15%", md)
+            self.assertIn("never collapsed", md)
+            self.assertIn("1 flagged TMB-H", md)
+            self.assertIn("1 flagged MSI-H", md)
+
+    def test_tumor_only_msi_header_only_honest_na(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp, self.COHORT, self.MSI_HEADER_ONLY, self.NEO)
+            for r in rows:
+                self.assertEqual(r["msi_status_wgs"], "not_available")
+                self.assertEqual(r["msi_status_wes"], "not_available")
+                self.assertIn("msi_not_available", r["note"])
+            self.assertIn("header-only", md)
+            self.assertIn("matched normal", md)
+
+    def test_paired_neo_header_only_honest_na(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp, self.COHORT, self.MSI,
+                "sample\thla_alleles_typed\tframeshift_neoantigens\n")
+            for r in rows:
+                self.assertEqual(r["neo_burden_strong_500nM"],
+                                 "not_available")
+                self.assertIn("neoantigen_not_available", r["note"])
+            self.assertIn("header-only", md)
+
+    def test_cohort_without_tmb_column(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp,
+                "sample\trna_sample_id\trna_total_reads\n"
+                "Pt01\tPt01-TD\t1000000\n",
+                self.MSI, self.NEO)
+            for r in rows:
+                self.assertEqual(r["tmb_coding_mut_per_mb"],
+                                 "not_available")
+                self.assertEqual(r["tmb_status"], "not_available")
+                self.assertIn("tmb_not_available", r["note"])
+            self.assertIn("carries no", md)
+
+    def test_empty_inputs_render_honest_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, md = self.run_join(
+                tmp,
+                "sample\ttmb_sample_id\ttmb_tmb_mut_per_mb"
+                "\ttmb_all_somatic_mut_per_mb\n",
+                "sample\tmsi_status_wgs\tmsi_status_wes\tbh_pct\n",
+                "sample\tburden_strong_500nM\n")
+            self.assertEqual(rows, [])
+            self.assertIn("no cohort-summary row matched", md)
+            self.assertIn("header-only", md)
+
+    def test_duplicate_patient_keeps_first_row(self):
+        # N1 fix: dedup must be first-wins (setdefault) everywhere,
+        # matching cohort_tables.py patients.setdefault. A repeated id
+        # is a data bug; deterministically keep the first occurrence.
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, _md = self.run_join(
+                tmp,
+                "sample\ttmb_sample_id\ttmb_tmb_mut_per_mb"
+                "\ttmb_all_somatic_mut_per_mb\n"
+                "Pt01\tPt01-TD\t13.5\t20.1\n"
+                "Pt01\tPt01-TD\t99.9\t99.9\n",
+                self.MSI,
+                self.NEO)
+            by_sample = {r["sample"]: r for r in rows}
+            self.assertEqual(by_sample["Pt01"]["tmb_coding_mut_per_mb"],
+                             "13.5")
+            self.assertEqual(by_sample["Pt01"]["tmb_status"],
+                             il.TMB_STATUS_H)
 
 
 if __name__ == "__main__":

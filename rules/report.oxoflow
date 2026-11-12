@@ -275,6 +275,40 @@ printf '[neoantigen_cohort_paired] paired cohort: neoantigen module is tumor-onl
 """
 
 [[rules]]
+name = "icb_linkage_page"
+description = "Patient-level ICB cross-evidence page: TMB x MSI x neoantigen burden"
+when = "config.tumor_only == 'true'"
+input = [
+    "report/cohort_summary.tsv",
+    "report/msi_cohort.tsv",
+    "report/neoantigen_cohort.tsv",
+    "{config.venus_tools}/icb_linkage.py",
+]
+output = [
+    "report/icb_linkage_cohort.tsv",
+    "report/icb_linkage_cohort.md",
+]
+# Keep: report module outputs are the clinical deliverables.
+protected_output = [
+    "report/icb_linkage_cohort.tsv",
+    "report/icb_linkage_cohort.md",
+]
+log = "logs/icb_linkage_page.log"
+threads = 2
+memory = "4G"
+environment = { pixi = "envs/report/pixi.toml" }
+shell = """
+mkdir -p report logs && \
+python {config.venus_tools}/icb_linkage.py \
+    --cohort-summary {input[0]} \
+    --msi-cohort {input[1]} \
+    --neoantigen-cohort {input[2]} \
+    --out-tsv {output[0]} \
+    --out-md {output[1]} \
+    2> {log}
+"""
+
+[[rules]]
 name = "clinical_report"
 description = "Render final cohort report (Markdown + HTML)"
 input = [
