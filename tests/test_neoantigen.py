@@ -1119,6 +1119,25 @@ class IcbLinkageTest(unittest.TestCase):
             self.assertIn("no cohort-summary row matched", md)
             self.assertIn("header-only", md)
 
+    def test_duplicate_patient_keeps_first_row(self):
+        # N1 fix: dedup must be first-wins (setdefault) everywhere,
+        # matching cohort_tables.py patients.setdefault. A repeated id
+        # is a data bug; deterministically keep the first occurrence.
+        with tempfile.TemporaryDirectory() as tmp:
+            rows, _md = self.run_join(
+                tmp,
+                "sample\ttmb_sample_id\ttmb_tmb_mut_per_mb"
+                "\ttmb_all_somatic_mut_per_mb\n"
+                "Pt01\tPt01-TD\t13.5\t20.1\n"
+                "Pt01\tPt01-TD\t99.9\t99.9\n",
+                self.MSI,
+                self.NEO)
+            by_sample = {r["sample"]: r for r in rows}
+            self.assertEqual(by_sample["Pt01"]["tmb_coding_mut_per_mb"],
+                             "13.5")
+            self.assertEqual(by_sample["Pt01"]["tmb_status"],
+                             il.TMB_STATUS_H)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

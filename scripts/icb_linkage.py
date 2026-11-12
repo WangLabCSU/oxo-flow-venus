@@ -111,11 +111,14 @@ def join(cohort_rows: list[dict], msi_rows: list[dict],
     def patient_of(sample: str) -> str:
         return suffix_re.sub("", sample)
 
+    # First-wins on duplicate patients everywhere, matching
+    # cohort_tables.py patients.setdefault: a repeated id is a data bug,
+    # and keeping the first row is deterministic, unlike last-wins.
     cohort: dict[str, dict] = {}
     for row in cohort_rows:
         sample = (row.get("tmb_sample_id") or "").strip()
         if sample:
-            cohort[patient_of(sample)] = row
+            cohort.setdefault(patient_of(sample), row)
     msi: dict[str, dict] = {}
     for row in msi_rows:
         sample = (row.get("sample") or "").strip()
