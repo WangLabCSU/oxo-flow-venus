@@ -191,7 +191,7 @@ class NeoantigenReport(unittest.TestCase):
                     "0.4\tp.E12D\t12\tENST1\n"
                     "KRAS\tmissense_variant\tHLA-A*02:01\tVLVVGAVGV\t80\t1.2\t"
                     "0.3\tp.G12C\t12\tENST2\n"
-                    "BRCA1\tframeshift_variant\tHLA-B*07:02\tYTYQTHTIL\t450\t"
+                    "BRCA1\tFS\tHLA-B*07:02\tYTYQTHTIL\t450\t"
                     "2\t0.2\tp.R1fs\t1\tENST3\n"
                     "ERBB2\tinframe_insertion\tHLA-B*07:02\tNLVLVGVA\t900\t5\t"
                     "0.1\tp.V2insI\t2\tENST4\n")
@@ -717,7 +717,7 @@ class ScrnaCorroborationTest(unittest.TestCase):
     PVAC = ("Gene Name\tVariant Type\tHLA Allele\tBest MT IC50 Score\n"
             "EGFR\tsnv\tHLA-A*02:01\t12.5\n"
             "KRAS\tsnv\tHLA-A*02:01\t88.0\n"
-            "NOTINMATRIX\tframeshift\tHLA-B*07:02\t50.0\n"
+            "NOTINMATRIX\tFS\tHLA-B*07:02\t50.0\n"
             "TP53\tsnv\tHLA-C*01:02\t6.2\n")
 
     def setUp(self):
@@ -837,7 +837,7 @@ class ScrnaCorroborationTest(unittest.TestCase):
                           out=corr)
             rows_text = ("EGFR\tmissense_variant\tHLA-A*02:01\tGVLVGVAPE\t"
                          "2.5\t0.1\t0.4\tp.E12D\t12\tENST1\n"
-                         "ZZZ9\tframeshift_variant\tHLA-B*07:02\tYYYYYYYYL\t"
+                         "ZZZ9\tFS\tHLA-B*07:02\tYYYYYYYYL\t"
                          "100\t2\t0.2\tp.R1fs\t1\tENST3\n")
             hla = "T1\tA\tHLA-A*02:01\tHLA-A*24:02\n"
             summary, cands, md = run_report(

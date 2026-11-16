@@ -123,6 +123,7 @@ memory = "32G"
 environment = { pixi = "envs/pvac/pixi.toml" }
 shell = """
 mkdir -p neoantigen/{pair_id} logs && \
+rm -rf neoantigen/{pair_id}/run && \
 export MHCFLURRY_DATA_DIR={config.mhcflurry_data_dir} && \
 python {config.venus_tools}/pvac_alleles.py \
     --alleles-tsv {input[1]} --min-alleles {config.neo_min_alleles} \

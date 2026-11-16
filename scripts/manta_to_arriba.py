@@ -263,6 +263,14 @@ def pick_tumor_sample(pairs, sample_names, preferred):
         return preferred
     if len(sample_names) == 1:
         return sample_names[0]
+    if not sample_names:
+        # Manta tumor-only candidateSV VCFs carry no FORMAT/sample columns,
+        # so PR/SR alt support is unavailable (these are unscored calls).
+        # None makes every fmt lookup miss -> alt_count 0 -> pVACfuse's
+        # --read-support filter drops the rows; honest for unscored calls.
+        print("[manta_to_arriba] VCF has no sample columns (candidateSV); "
+              "PR/SR read support will read as 0", file=sys.stderr)
+        return None
 
     def total(name):
         t = 0

@@ -224,8 +224,11 @@ def main():
 
     n_strong = sum(1 for r in cands if r["_s"] <= args.strong_nm)
     n_highaff = sum(1 for r in cands if r["_s"] <= args.high_aff_nm)
+    def _is_frameshift(vt):
+        v = (vt or "").strip().lower()
+        return v == "fs" or "frameshift" in v
     n_fs = sum(1 for r in cands if r["_s"] <= args.strong_nm
-               and "frameshift" in (r.get("variant_type", "") or "").lower())
+               and _is_frameshift(r.get("variant_type", "")))
     strong_rows = [r for r in cands if r["_s"] <= args.strong_nm]
     n_tpm_pass = sum(1 for r in strong_rows if r["expr_pass"] == "yes")
 
