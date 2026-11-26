@@ -216,9 +216,11 @@ environment = { pixi = "envs/qc/pixi.toml" }
 shell = """
 mkdir -p qc/alignqc logs/wgs_mosdepth && \
 cd qc/alignqc && \
-mosdepth --by 1000000 --thresholds 10,20 --threads {threads} \
-    {sample} ../../{input[0]} \
+mosdepth --by 1000000 --no-per-base --thresholds 10,20 \
+    --threads {threads} {sample} ../../{input[0]} \
     2> ../../{log} && \
+mv {sample}.thresholds.bed.gz {sample}.mosdepth.thresholds.bed.gz && \
+mv {sample}.regions.bed.gz {sample}.mosdepth.regions.bed.gz && \
 cd ../..
 """
 
